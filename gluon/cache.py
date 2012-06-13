@@ -19,7 +19,7 @@ When web2py is running on Google App Engine,
 caching will be provided by the GAE memcache
 (see gluon.contrib.gae_memcache)
 """
-
+import traceback
 import time
 import portalocker
 import shelve
@@ -163,7 +163,8 @@ class CacheInRam(CacheAbstract):
         self.locker.release()
 
     def __call__(self, key, f,
-                time_expire = DEFAULT_TIME_EXPIRE):
+                 time_expire = DEFAULT_TIME_EXPIRE,
+                 destroyer = None):
         """
         Attention! cache.ram does not copy the cached object. It just stores a reference to it.
         Turns out the deepcopying the object has some problems:
@@ -179,6 +180,8 @@ class CacheInRam(CacheAbstract):
         item = self.storage.get(key, None)
         if item and f is None:
             del self.storage[key]
+            if destroyer:
+                destroyer(item[1])
         self.storage[CacheAbstract.cache_stats_name]['hit_total'] += 1
         self.locker.release()
 
@@ -186,6 +189,8 @@ class CacheInRam(CacheAbstract):
             return None
         if item and (dt is None or item[0] > time.time() - dt):
             return item[1]
+        elif item and (item[0] < time.time() - dt) and destroyer:
+            destroyer(item[1])
         value = f()
 
         self.locker.acquire()
@@ -223,6 +228,54 @@ class CacheOnDisk(CacheAbstract):
 
     speedup_checks = set()
 
+    def _open_shelf_with_lock(self):
+        """Open and return a shelf object, obtaining an exclusive lock
+        on self.locker first. Replaces the close method of the
+        returned shelf instance with one that releases the lock upon
+        closing."""
+        def _close(self):
+            try:
+                shelve.Shelf.close(self)
+            finally:
+                portalocker.unlock(self.locker)
+                self.locker.close()
+
+        storage, locker, locker_locked = None, None, False
+        try:
+            locker = open(self.locker_name, 'a')
+            portalocker.lock(locker, portalocker.LOCK_EX)
+            locker_locked = True
+            storage = shelve.open(self.shelve_name)
+            storage.close = _close.__get__(storage, shelve.Shelf)
+            storage.locker = locker
+        except Exception:
+            logger.error('corrupted cache file %s, will try to delete and recreate it!' % (self.shelve_name))
+            if storage:
+                storage.close()
+                storage = None
+
+            try:
+                os.unlink(self.shelve_name)
+                storage = shelve.open(self.shelve_name)
+                storage.close = _close.__get__(storage, shelve.Shelf)
+                storage.locker = locker
+                if not CacheAbstract.cache_stats_name in storage.keys():
+                    storage[CacheAbstract.cache_stats_name] = {
+                        'hit_total': 0,
+                        'misses': 0,
+                    }
+                storage.sync()
+            except (IOError, OSError):
+                logger.warn('unable to delete and recreate cache file %s' % self.shelve_name)
+                if storage:
+                        storage.close()
+                        storage = None
+                if locker_locked:
+                    portalocker.unlock(locker)
+                if locker:
+                    locker.close()
+        return storage
+
     def __init__(self, request, folder=None):
         self.request = request
 
@@ -238,45 +291,26 @@ class CacheOnDisk(CacheAbstract):
         self.locker_name = os.path.join(folder,'cache.lock')
         self.shelve_name = os.path.join(folder,'cache.shelve')
 
-        locker, locker_locked = None, False
         speedup_key = (folder,CacheAbstract.cache_stats_name)
         if not speedup_key in self.speedup_checks or \
                 not os.path.exists(self.shelve_name):
             try:
-                locker = open(self.locker_name, 'a')
-                portalocker.lock(locker, portalocker.LOCK_EX)
-                locker_locked = True
-                storage = shelve.open(self.shelve_name)
+                storage = self._open_shelf_with_lock()
                 try:
                     if not storage.has_key(CacheAbstract.cache_stats_name):
                         storage[CacheAbstract.cache_stats_name] = {
                             'hit_total': 0,
                             'misses': 0,
-                            }
+                        }
                         storage.sync()
                 finally:
                     storage.close()
                 self.speedup_checks.add(speedup_key)
             except ImportError:
                 pass # no module _bsddb, ignoring exception now so it makes a ticket only if used
-            except:
-                logger.error('corrupted file %s, will try delete it!' \
-                                 % self.shelve_name)
-                try:
-                    os.unlink(self.shelve_name)
-                except IOError:
-                    logger.warn('unable to delete file %s' % self.shelve_name)
-                except OSError:
-                    logger.warn('unable to delete file %s' % self.shelve_name)
-            if locker_locked:
-                portalocker.unlock(locker)
-            if locker:
-                locker.close()
 
     def clear(self, regex=None):
-        locker = open(self.locker_name,'a')
-        portalocker.lock(locker, portalocker.LOCK_EX)
-        storage = shelve.open(self.shelve_name)
+        storage = self._open_shelf_with_lock()
         try:
             if regex is None:
                 storage.clear()
@@ -290,30 +324,26 @@ class CacheOnDisk(CacheAbstract):
             storage.sync()
         finally:
             storage.close()
-        portalocker.unlock(locker)
-        locker.close()
 
     def __call__(self, key, f,
                 time_expire = DEFAULT_TIME_EXPIRE):
         dt = time_expire
 
-        locker = open(self.locker_name,'a')
-        portalocker.lock(locker, portalocker.LOCK_EX)
-        storage = shelve.open(self.shelve_name)
+        storage = self._open_shelf_with_lock()
+        try:
+            item = storage.get(key, None)
+            if item and f is None:
+                del storage[key]
 
-        item = storage.get(key, None)
-        if item and f is None:
-            del storage[key]
+            storage[CacheAbstract.cache_stats_name] = {
+                'hit_total': storage[CacheAbstract.cache_stats_name]['hit_total'] + 1,
+                'misses': storage[CacheAbstract.cache_stats_name]['misses']
+            }
 
-        storage[CacheAbstract.cache_stats_name] = {
-            'hit_total': storage[CacheAbstract.cache_stats_name]['hit_total'] + 1,
-            'misses': storage[CacheAbstract.cache_stats_name]['misses']
-        }
-
-        storage.sync()
-
-        portalocker.unlock(locker)
-        locker.close()
+            storage.sync()
+        finally:
+            if storage:
+                storage.close()
 
         if f is None:
             return None
@@ -321,36 +351,32 @@ class CacheOnDisk(CacheAbstract):
             return item[1]
         value = f()
 
-        locker = open(self.locker_name,'a')
-        portalocker.lock(locker, portalocker.LOCK_EX)
-        storage[key] = (time.time(), value)
+        storage = self._open_shelf_with_lock()
+        try:
+            storage[key] = (time.time(), value)
 
-        storage[CacheAbstract.cache_stats_name] = {
-            'hit_total': storage[CacheAbstract.cache_stats_name]['hit_total'],
-            'misses': storage[CacheAbstract.cache_stats_name]['misses'] + 1
-        }
+            storage[CacheAbstract.cache_stats_name] = {
+                'hit_total': storage[CacheAbstract.cache_stats_name]['hit_total'],
+                'misses': storage[CacheAbstract.cache_stats_name]['misses'] + 1
+            }
 
-        storage.sync()
-
-        storage.close()
-        portalocker.unlock(locker)
-        locker.close()
+            storage.sync()
+        finally:
+            if storage:
+                storage.close()
 
         return value
 
     def increment(self, key, value=1):
-        locker = open(self.locker_name,'a')
-        portalocker.lock(locker, portalocker.LOCK_EX)
-        storage = shelve.open(self.shelve_name)
+        storage = self._open_shelf_with_lock()
         try:
             if key in storage:
                 value = storage[key][1] + value
             storage[key] = (time.time(), value)
             storage.sync()
         finally:
-            storage.close()
-            portalocker.unlock(locker)
-            locker.close()
+            if storage:
+                storage.close()
         return value
 
 
@@ -364,6 +390,8 @@ class Cache(object):
     - self.disk is an instance of CacheOnDisk
     """
 
+    autokey = ':%(name)s:%(args)s:%(vars)s'
+
     def __init__(self, request):
         """
         Parameters
@@ -372,7 +400,7 @@ class Cache(object):
             the global request object
         """
         # GAE will have a special caching
-        
+
         if have_settings and settings.global_settings.web2py_runtime_gae:
             from contrib.gae_memcache import MemcacheClient
             self.ram=self.disk=MemcacheClient(request)
@@ -389,9 +417,9 @@ class Cache(object):
                 logger.warning('no cache.disk (AttributeError)')
 
     def __call__(self,
-                key = None,
-                time_expire = DEFAULT_TIME_EXPIRE,
-                cache_model = None):
+                 key = None,
+                 time_expire = DEFAULT_TIME_EXPIRE,
+                 cache_model = None):
         """
         Decorator function that can be used to cache any function/method.
 
@@ -427,13 +455,15 @@ class Cache(object):
             cache_model = self.ram
 
         def tmp(func):
-            def action():
-                return cache_model(key, func, time_expire)
+            def action(*a,**b):
+                key2 = key.replace('%(name)s',func.__name__).replace('%(args)s',str(a)).replace('%(vars)s',str(b))
+                return cache_model(key2, lambda a=a,b=b:func(*a,**b), time_expire)
             action.__name___ = func.__name__
             action.__doc__ = func.__doc__
             return action
 
         return tmp
+
 
 
 

@@ -26,7 +26,7 @@ import cStringIO
 from email import MIMEBase, MIMEMultipart, MIMEText, Encoders, Header, message_from_string
 
 from contenttype import contenttype
-from storage import Storage, PickleableStorage, StorageList, Settings, Messages
+from storage import Storage, StorageList, Settings, Messages
 from utils import web2py_uuid
 from fileutils import read_file
 from gluon import *
@@ -73,9 +73,11 @@ def call_or_redirect(f,*args):
         redirect(f)
 
 def replace_id(url, form):
-    if url and not url[0] == '/' and url[:4] != 'http':
-        return URL(url.replace('[id]', str(form.vars.id)))
-    return url
+    if url:
+        url = url.replace('[id]', str(form.vars.id))
+        if url[0] == '/' or url[:4] == 'http':
+            return url
+    return URL(url)
 
 class Mail(object):
     """
@@ -189,22 +191,27 @@ class Mail(object):
         Optionally you can use PGP encryption or X509:
 
             mail.settings.cipher_type = None
+            mail.settings.gpg_home = None
             mail.settings.sign = True
             mail.settings.sign_passphrase = None
             mail.settings.encrypt = True
             mail.settings.x509_sign_keyfile = None
             mail.settings.x509_sign_certfile = None
+            mail.settings.x509_nocerts = False
             mail.settings.x509_crypt_certfiles = None
 
             cipher_type       : None
                                 gpg - need a python-pyme package and gpgme lib
                                 x509 - smime
+            gpg_home          : you can set a GNUPGHOME environment variable
+                                to specify home of gnupg
             sign              : sign the message (True or False)
             sign_passphrase   : passphrase for key signing
             encrypt           : encrypt the message
                              ... x509 only ...
             x509_sign_keyfile : the signers private key filename (PEM format)
             x509_sign_certfile: the signers certificate filename (PEM format)
+            x509_nocerts      : if True then no attached certificate in mail
             x509_crypt_certfiles: the certificates file to encrypt the messages
                                   with can be a file name or a list of
                                   file names (PEM format)
@@ -222,11 +229,13 @@ class Mail(object):
         settings.tls = tls
         settings.ssl = False
         settings.cipher_type = None
+        settings.gpg_home = None
         settings.sign = True
         settings.sign_passphrase = None
         settings.encrypt = True
         settings.x509_sign_keyfile = None
         settings.x509_sign_certfile = None
+        settings.x509_nocerts = False
         settings.x509_crypt_certfiles = None
         settings.debug = False
         settings.lock_keys = True
@@ -403,6 +412,10 @@ class Mail(object):
         #                       GPGME                         #
         #######################################################
         if cipher_type == 'gpg':
+            if self.settings.gpg_home:
+                # Set GNUPGHOME environment variable to set home of gnupg
+                import os
+                os.environ['GNUPGHOME'] = self.settings.gpg_home
             if not sign and not encrypt:
                 self.error="No sign and no encrypt is set but cipher type to gpg"
                 return False
@@ -497,36 +510,47 @@ class Mail(object):
         #######################################################
         elif cipher_type == 'x509':
             if not sign and not encrypt:
-                self.error="No sign and no encrypt is set but cipher type to x509"
+                self.error = "No sign and no encrypt is set but cipher type to x509"
                 return False
-            x509_sign_keyfile=self.settings.x509_sign_keyfile
+            x509_sign_keyfile = self.settings.x509_sign_keyfile
             if self.settings.x509_sign_certfile:
-                x509_sign_certfile=self.settings.x509_sign_certfile
+                x509_sign_certfile = self.settings.x509_sign_certfile
             else:
                 # if there is no sign certfile we'll assume the
                 # cert is in keyfile
-                x509_sign_certfile=self.settings.x509_sign_keyfile
+                x509_sign_certfile = self.settings.x509_sign_keyfile
             # crypt certfiles could be a string or a list
-            x509_crypt_certfiles=self.settings.x509_crypt_certfiles
-
+            x509_crypt_certfiles = self.settings.x509_crypt_certfiles
+            x509_nocerts = self.settings.x509_nocerts
 
             # need m2crypto
-            from M2Crypto import BIO, SMIME, X509
-            msg_bio = BIO.MemoryBuffer(payload_in.as_string())
+            try:
+                from M2Crypto import BIO, SMIME, X509
+            except Exception, e:
+                self.error = "Can't load M2Crypto module"
+                return False
+            msg_bio = BIO.MemoryBuffer( payload_in.as_string() )
             s = SMIME.SMIME()
 
             #                   SIGN
             if sign:
                 #key for signing
                 try:
-                    s.load_key(x509_sign_keyfile, x509_sign_certfile, callback=lambda x: sign_passphrase)
-                    if encrypt:
-                        p7 = s.sign(msg_bio)
+                    s.load_key( x509_sign_keyfile, x509_sign_certfile, callback = lambda x: sign_passphrase )
+                except Exception, e:
+                    self.error = "Something went wrong on certificate / private key loading: <%s>" % str( e )
+                    return False
+                try:
+                    if x509_nocerts:
+                        flags = SMIME.PKCS7_NOCERTS
                     else:
-                        p7 = s.sign(msg_bio,flags=SMIME.PKCS7_DETACHED)
-                    msg_bio = BIO.MemoryBuffer(payload_in.as_string()) # Recreate coz sign() has consumed it.
-                except Exception,e:
-                    self.error="Something went wrong on signing: <%s>" %str(e)
+                        flags = 0
+                    if not encrypt:
+                        flags += SMIME.PKCS7_DETACHED
+                    p7 = s.sign( msg_bio, flags = flags )
+                    msg_bio = BIO.MemoryBuffer( payload_in.as_string() ) # Recreate coz sign() has consumed it.
+                except Exception, e:
+                    self.error = "Something went wrong on signing: <%s> %s" % ( str( e ), str( flags ) )
                     return False
 
             #                   ENCRYPT
@@ -598,6 +622,8 @@ class Mail(object):
                     xcc['cc'] = cc
                 if bcc:
                     xcc['bcc'] = bcc
+                if reply_to:
+                    xcc['reply_to'] = reply_to
                 from google.appengine.api import mail
                 attachments = attachments and [(a.my_filename,a.my_payload) for a in attachments if not raw]
                 if attachments:
@@ -620,7 +646,7 @@ class Mail(object):
                     server.ehlo()
                     server.starttls()
                     server.ehlo()
-                if not self.settings.login is None:
+                if self.settings.login:
                     server.login(*self.settings.login.split(':',1))
                 result = server.sendmail(self.settings.sender, to, payload.as_string())
                 server.quit()
@@ -835,14 +861,14 @@ class Auth(object):
     """
 
     @staticmethod
-    def get_or_create_key(filename=None):
+    def get_or_create_key(filename=None, alg='sha512'):
         request = current.request
         if not filename:
             filename = os.path.join(request.folder,'private','auth.key')
         if os.path.exists(filename):
             key = open(filename,'r').read().strip()
         else:
-            key = web2py_uuid()
+            key = alg+':'+web2py_uuid()
             open(filename,'w').write(key)
         return key
 
@@ -911,7 +937,8 @@ class Auth(object):
         settings.registration_requires_approval = False
         settings.login_after_registration = False
         settings.alternate_requires_registration = False
-        settings.create_user_groups = True
+        settings.create_user_groups = "user_%(id)s"
+        settings.everybody_group_id = None
 
         settings.controller = controller
         settings.function = function
@@ -997,8 +1024,9 @@ class Auth(object):
 
         settings.retrieve_password_onvalidation = []
         settings.reset_password_onvalidation = []
+        settings.reset_password_onaccept = []
 
-        settings.email_case_sensitive = True                                   
+        settings.email_case_sensitive = True
         settings.username_case_sensitive = True
 
         settings.hmac_key = hmac_key
@@ -1113,14 +1141,16 @@ class Auth(object):
                 return '%(first_name)s %(last_name)s' % user
             except: return id
         self.signature = db.Table(self.db,'auth_signature',
-                                  Field('is_active','boolean',default=True),
+                                  Field('is_active','boolean',
+                                        default=True,
+                                        readable=False, writable=False),
                                   Field('created_on','datetime',
                                         default=request.now,
-                                        writable=False,readable=False),
+                                        writable=False, readable=False),
                                   Field('created_by',
                                         reference_user,
-                                        default=lazy_user,represent=represent,
-                                        writable=False,readable=False,
+                                        default=lazy_user, represent=represent,
+                                        writable=False, readable=False,
                                         ),
                                   Field('modified_on','datetime',
                                         update=request.now,default=request.now,
@@ -1135,6 +1165,7 @@ class Auth(object):
     def _get_user_id(self):
        "accessor for auth.user_id"
        return self.user and self.user.id or None
+
     user_id = property(_get_user_id, doc="user.id or None")
 
     def _HTTP(self, *a, **b):
@@ -1190,11 +1221,11 @@ class Auth(object):
         if URL() == action:
             next = ''
         else:
-            next = '?_next='+urllib.quote(URL(args=request.args,vars=request.vars))
+            next = '?_next='+urllib.quote(URL(args=request.args,vars=request.get_vars))
 
         li_next = '?_next='+urllib.quote(self.settings.login_next)
         lo_next = '?_next='+urllib.quote(self.settings.logout_next)
-            
+
         if self.user_id:
             logout=A(T('Logout'),_href=action+'/logout'+lo_next)
             profile=A(T('Profile'),_href=action+'/profile'+next)
@@ -1236,7 +1267,47 @@ class Auth(object):
         else:
             return True
 
-    def define_tables(self, username=False, migrate=True, fake_migrate=False):
+    def enable_record_versioning(self, 
+                                 tables,
+                                 archive_db = None,
+                                 archive_names='%(tablename)s_archive',
+                                 current_record='current_record'):
+        """
+        to enable full record vernionioning (including auth tables):
+
+        auth = Auth(db)
+        auth.define_tables(signature=True)
+        # define our own tables
+        db.define_table('mything',Field('name'),auth.signature)
+        auth.enable_record_vernining(tables=db)
+
+        tables can be the db (all table) or a list of tables.
+        only tables with modified_by and modified_on fiels (as created
+        by auth.signature) will have versioning. Old record versions will be 
+        in table 'mything_archive' automatically defined.
+        
+        when you enable enable_record_versioning, records are never
+        deleted but marked with is_active=False.
+
+        enable_record_versioning enables a common_filter for 
+        every table that filters out records with is_active = False
+
+        Important: If you use auth.enable_record_versioning,
+        do not use auth.archive or you will end up with duplicates.
+        auth.archive does explicitely what enable_record_versioning
+        does automatically.
+
+        """
+        tables = [table for table in tables]
+        for table in tables: 
+            if 'modified_on' in table.fields():
+                table._enable_record_versioning(
+                    archive_db = archive_db,
+                    archive_name = archive_names,
+                    current_record = current_record)
+                
+    def define_tables(self, username=False, signature=None, 
+                      migrate=True, fake_migrate=False):
         """
         to be called unless tables are defined manually
 
@@ -1253,8 +1324,18 @@ class Auth(object):
 
         db = self.db
         settings = self.settings
+        if signature==True:
+            signature_list = [self.signature]
+        elif not signature:
+            signature_list = []
+        elif isinstance(signature,self.db.Table):
+            signature_list = [signature]
+        else:
+            signature_list = signature
         if not settings.table_user_name in db.tables:
             passfield = settings.password_field
+            extra_fields = settings.extra_fields.get(
+                settings.table_user_name,[])+signature_list
             if username or settings.cas_provider:
                 table = db.define_table(
                     settings.table_user_name,
@@ -1277,7 +1358,7 @@ class Auth(object):
                     Field('registration_id', length=512,
                           writable=False, readable=False, default='',
                           label=self.messages.label_registration_id),
-                    *settings.extra_fields.get(settings.table_user_name,[]),
+                    *extra_fields,
                     **dict(
                         migrate=self.__get_migrate(settings.table_user_name,
                                                    migrate),
@@ -1308,7 +1389,7 @@ class Auth(object):
                     Field('registration_id', length=512,
                           writable=False, readable=False, default='',
                           label=self.messages.label_registration_id),
-                    *settings.extra_fields.get(settings.table_user_name,[]),
+                    *extra_fields,
                     **dict(
                         migrate=self.__get_migrate(settings.table_user_name,
                                                    migrate),
@@ -1329,13 +1410,15 @@ class Auth(object):
             table.registration_key.default = ''
         settings.table_user = db[settings.table_user_name]
         if not settings.table_group_name in db.tables:
+            extra_fields = settings.extra_fields.get(
+                settings.table_group_name,[])+signature_list
             table = db.define_table(
                 settings.table_group_name,
                 Field('role', length=512, default='',
                         label=self.messages.label_role),
                 Field('description', 'text',
-                        label=self.messages.label_description),                
-                *settings.extra_fields.get(settings.table_group_name,[]),
+                        label=self.messages.label_description),
+                *extra_fields,
                 **dict(
                     migrate=self.__get_migrate(
                         settings.table_group_name, migrate),
@@ -1345,13 +1428,15 @@ class Auth(object):
                  % settings.table_group_name)
         settings.table_group = db[settings.table_group_name]
         if not settings.table_membership_name in db.tables:
+            extra_fields = settings.extra_fields.get(
+                settings.table_membership_name,[])+signature_list
             table = db.define_table(
                 settings.table_membership_name,
                 Field('user_id', settings.table_user,
                         label=self.messages.label_user_id),
                 Field('group_id', settings.table_group,
                         label=self.messages.label_group_id),
-                *settings.extra_fields.get(settings.table_membership_name,[]),
+                *extra_fields,
                 **dict(
                     migrate=self.__get_migrate(
                         settings.table_membership_name, migrate),
@@ -1364,6 +1449,8 @@ class Auth(object):
                     '%(role)s (%(id)s)')
         settings.table_membership = db[settings.table_membership_name]
         if not settings.table_permission_name in db.tables:
+            extra_fields = settings.extra_fields.get(
+                settings.table_permission_name,[])+signature_list
             table = db.define_table(
                 settings.table_permission_name,
                 Field('group_id', settings.table_group,
@@ -1374,7 +1461,7 @@ class Auth(object):
                         label=self.messages.label_table_name),
                 Field('record_id', 'integer',default=0,
                         label=self.messages.label_record_id),
-                *settings.extra_fields.get(settings.table_permission_name,[]),
+                *extra_fields,
                 **dict(
                     migrate=self.__get_migrate(
                         settings.table_permission_name, migrate),
@@ -1426,7 +1513,7 @@ class Auth(object):
                     *settings.extra_fields.get(settings.table_cas_name,[]),
                     **dict(
                         migrate=self.__get_migrate(
-                            settings.table_event_name, migrate),
+                            settings.table_cas_name, migrate),
                         fake_migrate=fake_migrate))
                 table.user_id.requires = IS_IN_DB(db, '%s.id' % \
                     settings.table_user_name,
@@ -1495,8 +1582,10 @@ class Auth(object):
             user_id = table_user.insert(**table_user._filter_fields(keys))
             user =  self.user = table_user[user_id]
             if self.settings.create_user_groups:
-                group_id = self.add_group("user_%s" % user_id)
+                group_id = self.add_group(self.settings.create_user_groups % user)
                 self.add_membership(group_id, user_id)
+            if self.settings.everybody_group_id:
+                self.add_membership(self.settings.everybody_group_id, user_id)
         return user
 
     def basic(self):
@@ -1824,7 +1913,7 @@ class Auth(object):
             session.flash = self.messages.logged_in
 
         self.update_groups()
-            
+
         # how to continue
         if self.settings.login_form == self:
             if accepted_form:
@@ -1865,7 +1954,7 @@ class Auth(object):
             cas_user = cas.get_user()
             if cas_user:
                 next = cas.logout_url(next)
-
+                
         current.session.auth = None
         current.session.flash = self.messages.logged_out
         redirect(next)
@@ -1938,8 +2027,10 @@ class Auth(object):
                         onvalidation=onvalidation,hideerror=self.settings.hideerror):
             description = self.messages.group_description % form.vars
             if self.settings.create_user_groups:
-                group_id = self.add_group("user_%s" % form.vars.id, description)
+                group_id = self.add_group(self.settings.create_user_groups % form.vars, description)
                 self.add_membership(group_id, form.vars.id)
+            if self.settings.everybody_group_id:
+                self.add_membership(self.settings.everybody_group_id, form.vars.id)
             if self.settings.registration_requires_verification:
                 if not self.settings.mailer or \
                    not self.settings.mailer.send(to=form.vars.email,
@@ -1969,7 +2060,7 @@ class Auth(object):
                 session.auth = Storage(user=user, last_visit=request.now,
                                        expiration=self.settings.expiration,
                                        hmac_key = web2py_uuid())
-                self.user = user              
+                self.user = user
                 self.update_groups()
                 session.flash = self.messages.logged_in
             self.log_event(log, form.vars)
@@ -2304,14 +2395,8 @@ class Auth(object):
             elif user.registration_key in ('pending','disabled','blocked'):
                 session.flash = self.messages.registration_pending
                 redirect(self.url(args=request.args))
-            reset_password_key = str(int(time.time()))+'-' + web2py_uuid()
-
-            if self.settings.mailer.send(to=form.vars.email,
-                                         subject=self.messages.reset_password_subject,
-                                         message=self.messages.reset_password % \
-                                             dict(key=reset_password_key)):
+            if self.email_reset_password(user):
                 session.flash = self.messages.email_sent
-                user.update_record(reset_password_key=reset_password_key)
             else:
                 session.flash = self.messages.unable_to_send_email
             self.log_event(log, user)
@@ -2323,6 +2408,16 @@ class Auth(object):
             redirect(next)
         # old_requires = table_user.email.requires
         return form
+
+    def email_reset_password(self,user):
+        reset_password_key = str(int(time.time()))+'-' + web2py_uuid()
+        if self.settings.mailer.send(to=user.email,
+                                     subject=self.messages.reset_password_subject,
+                                     message=self.messages.reset_password % \
+                                         dict(key=reset_password_key)):
+            user.update_record(reset_password_key=reset_password_key)
+            return True
+        return False
 
     def retrieve_password(
         self,
@@ -2657,9 +2752,11 @@ class Auth(object):
         returns the group_id of the group uniquely associated to this user
         i.e. role=user:[user_id]
         """
-        if not user_id and self.user:
-            user_id = self.user.id
-        role = 'user_%s' % user_id
+        if user_id:
+            user = self.settings.table_user[user_id]
+        else:
+            user = self.user
+        role = self.settings.create_user_groups % user
         return self.id_group(role)
 
     def has_membership(self, group_id=None, user_id=None, role=None):
@@ -2740,6 +2837,11 @@ class Auth(object):
         if group_id is passed, it checks whether the group has the permission
         """
 
+        if not group_id and self.settings.everybody_group_id and \
+                self.has_permission(
+            name,table_name,record_id,user_id=None,
+            group_id=self.settings.everybody_group_id): return True
+        
         if not user_id and not group_id and self.user:
             user_id = self.user.id
         if user_id:
@@ -2787,9 +2889,15 @@ class Auth(object):
         permission = self.settings.table_permission
         if group_id == 0:
             group_id = self.user_group()
-        id = permission.insert(group_id=group_id, name=name,
-                               table_name=str(table_name),
-                               record_id=long(record_id))
+        record = self.db(permission.group_id==group_id)(permission.name==name)\
+            (permission.table_name==str(table_name))\
+            (permission.record_id==long(record_id)).select().first()
+        if record:
+            id = record.id
+        else:
+            id = permission.insert(group_id=group_id, name=name,
+                                   table_name=str(table_name),
+                                   record_id=long(record_id))
         self.log_event(self.messages.add_permission_log,
                        dict(permission_id=id, group_id=group_id,
                             name=name, table_name=table_name,
@@ -2829,16 +2937,27 @@ class Auth(object):
         """
         if not user_id:
             user_id = self.user_id
-        if self.has_permission(name, table, 0, user_id):
+        if isinstance(table,str) and table in self.db.tables():
+            table = self.db[table]
+        if not isinstance(table,str) and\
+                self.has_permission(name, table, 0, user_id):
             return table.id > 0
         db = self.db
         membership = self.settings.table_membership
         permission = self.settings.table_permission
-        return table.id.belongs(db(membership.user_id == user_id)\
-                           (membership.group_id == permission.group_id)\
-                           (permission.name == name)\
-                           (permission.table_name == table)\
-                           ._select(permission.record_id))
+        query = table.id.belongs(
+            db(membership.user_id == user_id)\
+                (membership.group_id == permission.group_id)\
+                (permission.name == name)\
+                (permission.table_name == table)\
+                ._select(permission.record_id))
+        if self.settings.everybody_group_id:
+            query|=table.id.belongs(
+                db(permission.group_id==self.settings.everybody_group_id)\
+                    (permission.name == name)\
+                    (permission.table_name == table)\
+                    ._select(permission.record_id))
+        return query
 
     @staticmethod
     def archive(form,
@@ -4178,7 +4297,7 @@ class Expose(object):
         if not os.path.isdir(filename):
             current.response.headers['Content-Type'] = contenttype(filename)
             raise HTTP(200,open(filename,'rb'),**current.response.headers)
-        self.path = path = os.path.join(filename,'*')        
+        self.path = path = os.path.join(filename,'*')
         self.folders = [f[len(path)-1:] for f in sorted(glob.glob(path)) \
                             if os.path.isdir(f) and not self.isprivate(f)]
         self.filenames = [f[len(path)-1:] for f in sorted(glob.glob(path)) \
@@ -4199,7 +4318,7 @@ class Expose(object):
 
     def table_folders(self):
         return TABLE(*[TR(TD(A(folder,_href=URL(args=self.args+[folder])))) \
-                           for folder in self.folders])    
+                           for folder in self.folders])
     @staticmethod
     def isprivate(f):
         return 'private' in f or f.startswith('.') or f.endswith('~')
@@ -4226,5 +4345,6 @@ class Expose(object):
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
+
 
 

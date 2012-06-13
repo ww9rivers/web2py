@@ -1227,7 +1227,7 @@ class Worker(Thread):
 
     def _handleError(self, typ, val, tb):
         if typ == SSLError:
-            if 'timed out' in val.args[0]:
+            if 'timed out' in str(val.args[0]):
                 typ = SocketTimeout
         if typ == SocketTimeout:
             if __debug__:
@@ -2073,5 +2073,6 @@ def demo():
 
 if __name__=='__main__':
     demo()
+
 
 

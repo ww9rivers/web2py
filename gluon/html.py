@@ -80,6 +80,7 @@ __all__ = [
     'OPTGROUP',
     'SELECT',
     'SPAN',
+    'STRONG',
     'STYLE',
     'TABLE',
     'TAG',
@@ -190,7 +191,7 @@ def URL(
 
         >>> str(URL(a='a', c='c', f='f', vars={'id' : '%(id)d' }, url_encode=True))
         '/a/c/f?id=%25%28id%29d'
-        
+
         >>> str(URL(a='a', c='c', f='f', anchor='%(id)d', url_encode=False))
         '/a/c/f#%(id)d'
 
@@ -261,22 +262,25 @@ def URL(
             else:
                 raise SyntaxError, 'when calling URL, function or function name required'
         elif '/' in f:
+            if f.startswith("/"):
+                f = f[1:]
             items = f.split('/')
             function = f = items[0]
             args = items[1:] + args
         else:
             function = f
-        if '.' in function:
-            function, extension = function.split('.', 1)
 
         # if the url gets a static resource, don't force extention
         if controller == 'static':
             extension = None
 
+        if '.' in function:
+            function, extension = function.split('.', 1)
+
     function2 = '%s.%s' % (function,extension or 'html')
 
     if not (application and controller and function):
-        raise SyntaxError, 'not enough information to build the url'
+        raise SyntaxError, 'not enough information to build the url (%s %s %s)' % (application, controller, function)
 
     if args:
         if url_encode:
@@ -782,7 +786,7 @@ class DIV(XmlComponent):
                 c.latest = self.latest
                 c.session = self.session
                 c.formname = self.formname
-                c['hideerror']=hideerror
+                if hideerror: c['hideerror'] = hideerror
                 newstatus = c._traverse(status,hideerror) and newstatus
 
         # for input, textarea, select, option
@@ -1317,6 +1321,11 @@ class P(DIV):
         return text
 
 
+class STRONG(DIV):
+
+    tag = 'strong'
+
+
 class B(DIV):
 
     tag = 'b'
@@ -1422,7 +1431,7 @@ class CODE(DIV):
         link = self['link']
         counter = self.attributes.get('counter', 1)
         highlight_line = self.attributes.get('highlight_line', None)
-        context_lines = self.attributes.get('context_lines', None) 
+        context_lines = self.attributes.get('context_lines', None)
         styles = self['styles'] or {}
         return highlight(
             join(self.components),
@@ -1809,6 +1818,9 @@ class FORM(DIV):
         self.latest = Storage()
         self.accepted = None # none for not submitted
 
+    def assert_status(self, status, request_vars):
+        return status
+
     def accepts(
         self,
         request_vars,
@@ -1848,6 +1860,7 @@ class FORM(DIV):
                 status = False
                 self.record_changed = True
         status = self._traverse(status,hideerror)
+        status = self.assert_status(status, request_vars)
         if onvalidation:
             if isinstance(onvalidation, dict):
                 onsuccess = onvalidation.get('onsuccess', None)
@@ -2003,6 +2016,8 @@ class FORM(DIV):
         self.validate(**kwargs)
         return self
 
+    def add_button(self,value,url,_class=None):
+        self[0][-1][1].append(INPUT(_type="button",_value=value,_onclick="window.location='%s';return false" % url,_class=_class))
 
 class BEAUTIFY(DIV):
 
@@ -2040,6 +2055,9 @@ class BEAUTIFY(DIV):
         if level == 0:
             return
         for c in self.components:
+            if hasattr(c,'value') and not callable(c.value):
+                if c.value:
+                    components.append(c.value)
             if hasattr(c,'xml') and callable(c.xml):
                 components.append(c)
                 continue
@@ -2139,12 +2157,13 @@ class MENU(DIV):
 
     def serialize_mobile(self, data, select=None, prefix=''):
         if not select:
-            select = SELECT()
+            select = SELECT(**self.attributes)
         for item in data:
-            if item[2]:
-                select.append(OPTION(CAT(prefix, item[0]), _value=item[2], _selected=item[1]))
-            if len(item)>3 and len(item[3]):
-                self.serialize_mobile(item[3], select, prefix = CAT(prefix, item[0], '/'))
+            if len(item) <= 4 or item[4] == True: 
+                if item[2]:
+                    select.append(OPTION(CAT(prefix, item[0]), _value=item[2], _selected=item[1]))
+                    if len(item)>3 and len(item[3]):
+                        self.serialize_mobile(item[3], select, prefix = CAT(prefix, item[0], '/'))
         select['_onchange'] = 'window.location=this.value'
         return select
 
@@ -2261,10 +2280,10 @@ class web2pyHTMLParser(HTMLParser):
                 data = data.decode('latin1')
         self.parent.append(data.encode('utf8','xmlcharref'))
     def handle_charref(self,name):
-        if name[1].lower()=='x':
-            self.parent.append(unichr(int(name[2:], 16)).encode('utf8'))
+        if name.startswith('x'):
+            self.parent.append(unichr(int(name[1:], 16)).encode('utf8'))
         else:
-            self.parent.append(unichr(int(name[1:], 10)).encode('utf8'))
+            self.parent.append(unichr(int(name)).encode('utf8'))
     def handle_entityref(self,name):
         self.parent.append(unichr(name2codepoint[name]).encode('utf8'))
     def handle_endtag(self, tagname):
@@ -2321,18 +2340,24 @@ class MARKMIN(XmlComponent):
     """
     For documentation: http://web2py.com/examples/static/markmin.html
     """
-    def __init__(self, text, extra=None, allowed=None, sep='p'):
+    def __init__(self, text, extra=None, allowed=None, sep='p',
+                 url=None, environment=None, latex='google'):
         self.text = text
         self.extra = extra or {}
         self.allowed = allowed or {}
         self.sep = sep
+        self.url = URL if url==True else url
+        self.environment = environment
+        self.latex = latex
 
     def xml(self):
         """
         calls the gluon.contrib.markmin render function to convert the wiki syntax
         """
         from contrib.markmin.markmin2html import render
-        return render(self.text,extra=self.extra,allowed=self.allowed,sep=self.sep)
+        return render(self.text,extra=self.extra,
+                      allowed=self.allowed,sep=self.sep,latex=self.latex,
+                      URL=self.url, environment=self.environment)
 
     def __str__(self):
         return self.xml()
@@ -2354,6 +2379,7 @@ class MARKMIN(XmlComponent):
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
+
 
 
 

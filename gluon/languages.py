@@ -34,7 +34,7 @@ regex_translate = re.compile(PY_STRING_LITERAL_RE, re.DOTALL)
 # patter for a valid accept_language
 
 regex_language = \
-    re.compile('^[a-zA-Z]{2}(\-[a-zA-Z]{2})?(\-[a-zA-Z]+)?$')
+    re.compile('^([a-zA-Z]{2})(\-[a-zA-Z]{2})?(\-[a-zA-Z]+)?$')
 
 
 def read_dict_aux(filename):
@@ -49,7 +49,7 @@ def read_dict_aux(filename):
         logging.error('Syntax error in %s' % filename)
         return {'__corrupted__':True}
 
-def read_dict(filename):    
+def read_dict(filename):
     return getcfs('language:%s'%filename,filename,
                   lambda filename=filename:read_dict_aux(filename))
 
@@ -223,28 +223,66 @@ class translator(object):
         self.force(self.http_accept_language)
 
     def force(self, *languages):
+        def lang_sampling(lang_tuple, langlist):
+            """ search lang_tuple in langlist
+            Args:
+                lang_tuple (tuple of strings): ('aa'[[,'-bb'],'-cc'])
+                langlist   (list of strings): [available languages]
+            Returns:
+                language from langlist or None
+            """
+            # step 1:
+            # compare "aa-bb-cc" | "aa-bb" | "aa" from lang_tuple
+            # with strings from langlist. Return appropriate string
+            # from langlist:
+            tries = range(len(lang_tuple),0,-1)
+            for i in tries:
+                language="".join(lang_tuple[:i])
+                if language in langlist:
+                    return language
+            # step 2 (if not found in step 1):
+            # compare "aa-bb-cc" | "aa-bb" | "aa" from lang_tuple
+            # with left part of a string from langlist. Return
+            # appropriate string from langlist
+            for i in tries:
+                lang="".join(lang_tuple[:i])
+                for language in langlist:
+                    if language.startswith(lang):
+                        return language
+            return None
+
         if not languages or languages[0] is None:
             languages = []
         if len(languages) == 1 and isinstance(languages[0], (str, unicode)):
             languages = languages[0]
+
         if languages:
             if isinstance(languages, (str, unicode)):
-                accept_languages = languages.split(';')
+                parts = languages.split(';')
                 languages = []
-                [languages.extend(al.split(',')) for al in accept_languages]
-                languages = [item.strip().lower() for item in languages \
-                                 if regex_language.match(item.strip())]
+                [languages.extend(al.split(',')) for al in parts]
 
+            possible_languages = self.get_possible_languages()
             for language in languages:
-                if language in self.current_languages:
-                    self.accepted_language = language
-                    break
-                filename = os.path.join(self.folder, 'languages/', language + '.py')
-                if os.path.exists(filename):
-                    self.accepted_language = language
-                    self.language_file = filename
-                    self.t = read_dict(filename)
-                    return languages
+                match_language = regex_language.match(language.strip().lower())
+                if match_language:
+                    match_language = tuple(part
+                                           for part in match_language.groups()
+                                           if part)
+                    language = lang_sampling(match_language,
+                                             self.current_languages)
+                    if language:
+                        self.accepted_language = language
+                        break
+                    language = lang_sampling(match_language, possible_languages)
+                    if language:
+                        filename = os.path.join(
+                            self.folder,'languages/',language + '.py')
+                        if os.path.exists(filename):
+                            self.accepted_language = language
+                            self.language_file = filename
+                            self.t = read_dict(filename)
+                            return languages
         self.language_file = None
         self.t = {}  # ## no language by default
         return languages
@@ -294,7 +332,7 @@ class translator(object):
             self.t[message] = mt = tokens[0]
             if self.language_file and not is_gae:
                 write_dict(self.language_file, self.t)
-        if symbols or symbols == 0:
+        if symbols or symbols == 0 or symbols == "":
             return mt % symbols
         return mt
 
@@ -308,8 +346,9 @@ def findT(path, language='en-us'):
     mp = os.path.join(path, 'models')
     cp = os.path.join(path, 'controllers')
     vp = os.path.join(path, 'views')
+    mop = os.path.join(path, 'modules')
     for file in listdir(mp, '.+\.py', 0) + listdir(cp, '.+\.py', 0)\
-         + listdir(vp, '.+\.html', 0):
+         + listdir(vp, '.+\.html', 0) + listdir(mop, '.+\.py', 0):
         fp = portalocker.LockedFile(file, 'r')
         data = fp.read()
         fp.close()
@@ -346,6 +385,7 @@ def update_all_languages(application_path):
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
+
 
 
 

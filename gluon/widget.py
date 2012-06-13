@@ -21,6 +21,7 @@ import math
 import logging
 import newcron
 import main
+import getpass
 
 from fileutils import w2p_pack, read_file, write_file
 from shell import run, test
@@ -54,6 +55,25 @@ if not sys.version[:3] in ['2.4', '2.5', '2.6', '2.7']:
 
 logger = logging.getLogger("web2py")
 
+def run_system_tests():
+    major_version = sys.version_info[0]
+    minor_version = sys.version_info[1]
+    print "minor_version = %r" % minor_version
+    if major_version == 2:
+        if minor_version in (5, 6):
+            print "Python 2.5 or 2.6"
+            ret = os.system("PYTHONPATH=. unit2 -v gluon.tests")
+        elif minor_version in (7,):
+            print "Python 2.7"
+            ret = os.system("PYTHONPATH=. python -m unittest -v gluon.tests")
+        else:
+            print "unknown python 2.x version"
+            ret = 256
+    else:
+        print "Only Python 2.x supported."
+        ret = 256
+    sys.exit(ret and 1)
+
 class IO(object):
     """   """
 
@@ -82,12 +102,13 @@ def try_start_browser(url):
         print 'warning: unable to detect your browser'
 
 
-def start_browser(ip, port):
+def start_browser(proto, ip, port):
     """ Starts the default browser """
     print 'please visit:'
-    print '\thttp://%s:%s' % (ip, port)
+    url = '%s://%s:%s' % (proto, ip, port)
+    print '\t', url
     print 'starting browser...'
-    try_start_browser('http://%s:%s' % (ip, port))
+    try_start_browser(url)
 
 
 def presentation(root):
@@ -348,10 +369,16 @@ class web2pyDialog(object):
         except:
             return self.error('invalid port number')
 
-        self.url = 'http://%s:%s' % (ip, port)
+        # Check for non default value for ssl inputs
+        if (len(self.options.ssl_certificate) > 0) or (len(self.options.ssl_private_key) > 0):
+            proto = 'https'
+        else:
+            proto = 'http'
+        
+        self.url = '%s://%s:%s' % (proto, ip, port)
         self.connect_pages()
         self.button_start.configure(state='disabled')
-
+        
         try:
             options = self.options
             req_queue_size = options.request_queue_size
@@ -378,10 +405,14 @@ class web2pyDialog(object):
             self.button_start.configure(state='normal')
             return self.error(str(e))
 
+        if not self.server_ready():
+            self.button_start.configure(state='normal')
+            return
+
         self.button_stop.configure(state='normal')
 
         if not options.taskbar:
-            thread.start_new_thread(start_browser, (ip, port))
+            thread.start_new_thread(start_browser, (proto, ip, port))
 
         self.password.configure(state='readonly')
         self.ip.configure(state='readonly')
@@ -389,6 +420,13 @@ class web2pyDialog(object):
 
         if self.tb:
             self.tb.SetServerRunning()
+
+    def server_ready(self):
+        for listener in self.server.server.listeners:
+            if listener.ready:
+                return True
+
+        return False
 
     def stop(self):
         """ Stop web2py server """
@@ -734,6 +772,14 @@ def console():
                       default=None,
                       help=msg)
 
+
+    msg = 'runs web2py tests'
+    parser.add_option('--run_system_tests',
+                      action='store_true',
+                      dest='run_system_tests',
+                      default=False,
+                      help=msg)
+
     if '-A' in sys.argv: k = sys.argv.index('-A')
     elif '--args' in sys.argv: k = sys.argv.index('--args')
     else: k=len(sys.argv)
@@ -742,6 +788,9 @@ def console():
     options.args = [options.run] + other_args
     global_settings.cmd_options = options
     global_settings.cmd_args = args
+
+    if options.run_system_tests:
+        run_system_tests()
 
     if options.quiet:
         capture = cStringIO.StringIO()
@@ -847,6 +896,13 @@ def start(cron=True):
             if hasattr(options,key):
                 setattr(options,key,getattr(options2,key))
 
+    if False and not os.path.exists('logging.conf') and \
+            os.path.exists('logging.example.conf'):
+        import shutil
+        sys.stdout.write("Copying logging.conf.example to logging.conf ... ")
+        shutil.copyfile('logging.example.conf', 'logging.conf')
+        sys.stdout.write("OK\n")
+
     # ## if -T run doctests (no cron)
     if hasattr(options,'test') and options.test:
         test(options.test, verbose=options.verbose)
@@ -927,6 +983,17 @@ def start(cron=True):
 
     if root:
         root.focus_force()
+
+        # Mac OS X - make the GUI window rise to the top
+        if os.path.exists("/usr/bin/osascript"):
+            applescript = """
+tell application "System Events"
+    set proc to first process whose unix id is %d
+    set frontmost of proc to true
+end tell
+""" % (os.getpid())
+            os.system("/usr/bin/osascript -e '%s'" % applescript)
+
         if not options.quiet:
             presentation(root)
         master = web2pyDialog(root, options)
@@ -942,7 +1009,7 @@ def start(cron=True):
     # ## if no tk and no password, ask for a password
 
     if not root and options.password == '<ask>':
-        options.password = raw_input('choose a password:')
+        options.password = getpass.getpass('choose a password:')
 
     if not options.password and not options.nobanner:
         print 'no password, no admin interface'
@@ -951,9 +1018,16 @@ def start(cron=True):
 
     (ip, port) = (options.ip, int(options.port))
 
+    # Check for non default value for ssl inputs
+    if (len(options.ssl_certificate) > 0) or (len(options.ssl_private_key) > 0):
+        proto = 'https'
+    else:
+        proto = 'http'
+    url = '%s://%s:%s' % (proto, ip, port)
+
     if not options.nobanner:
         print 'please visit:'
-        print '\thttp://%s:%s' % (ip, port)
+        print '\t', url
         print 'use "kill -SIGTERM %i" to shutdown the web2py server' % os.getpid()
 
     server = main.HttpServer(ip=ip,
@@ -980,6 +1054,7 @@ def start(cron=True):
     except KeyboardInterrupt:
         server.stop()
     logging.shutdown()
+
 
 
 

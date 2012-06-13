@@ -166,7 +166,7 @@ def step3():
         try:
             tables=sort_tables(session.app['tables'])
         except RuntimeError:
-            response.flash=T('invalid circual reference')
+            response.flash=T('invalid circular reference')
         else:
             if n<m-1:
                 redirect(URL('step3',args=n+1))
@@ -437,7 +437,10 @@ def create(options):
         redirect(URL('step6'))
     params = dict(session.app['params'])
     app = session.app['name']
-    if not app_create(app,request,force=True,key=params['security_key']):
+    if app_create(app,request,force=True,key=params['security_key']):
+        if MULTI_USER_MODE:
+            db.app.insert(name=app,owner=auth.user.id)
+    else:
         session.flash = 'Failure to create application'
         redirect(URL('step6'))
 

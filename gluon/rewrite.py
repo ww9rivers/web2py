@@ -397,6 +397,16 @@ def load_routers(all_apps):
             router.languages = set(router.languages)
         else:
             router.languages = set()
+        if router.functions:
+            if isinstance(router.functions, (set, tuple, list)):
+                functions = set(router.functions)
+                if isinstance(router.default_function, str):
+                    functions.add(router.default_function)  # legacy compatibility
+                router.functions = { router.default_controller: functions }
+            for controller in router.functions:
+                router.functions[controller] = set(router.functions[controller])
+        else:
+            router.functions = dict()
         if app != 'BASE':
             for base_only in ROUTER_BASE_KEYS:
                 router.pop(base_only, None)
@@ -412,16 +422,6 @@ def load_routers(all_apps):
             if router.controllers:
                 router.controllers.add('static')
                 router.controllers.add(router.default_controller)
-            if router.functions:
-                if isinstance(router.functions, (set, tuple, list)):
-                    functions = set(router.functions)
-                    if isinstance(router.default_function, str):
-                        functions.add(router.default_function)  # legacy compatibility
-                    router.functions = { router.default_controller: functions }
-                for controller in router.functions:
-                    router.functions[controller] = set(router.functions[controller])
-            else:
-                router.functions = dict()
 
     if isinstance(routers.BASE.applications, str) and routers.BASE.applications == 'ALL':
         routers.BASE.applications = list(all_apps)
@@ -1016,13 +1016,16 @@ class MapUrlIn(object):
         self.request.args = self.args
         if self.language:
             self.request.uri_language = self.language
-        uri = '/%s/%s/%s' % (self.application, self.controller, self.function)
+        uri = '/%s/%s' % (self.controller, self.function)
+        app = self.application
         if self.map_hyphen:
             uri = uri.replace('_', '-')
+            app = app.replace('_', '-')
         if self.extension != 'html':
             uri += '.' + self.extension
         if self.language:
             uri = '/%s%s' % (self.language, uri)
+        uri = '/%s%s' % (app, uri)
         uri += self.args and urllib.quote('/' + '/'.join([str(x) for x in self.args])) or ''
         uri += (self.query and ('?' + self.query) or '')
         self.env['REQUEST_URI'] = uri
@@ -1270,6 +1273,7 @@ def get_effective_router(appname):
     if not routers or appname not in routers:
         return None
     return Storage(routers[appname])  # return a copy
+
 
 
 

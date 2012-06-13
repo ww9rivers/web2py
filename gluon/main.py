@@ -28,6 +28,7 @@ import socket
 import tempfile
 import random
 import string
+import urllib2
 from fileutils import abspath, write_file, parse_version
 from settings import global_settings
 from admin import add_path_first, create_missing_folders, create_missing_app_folders
@@ -68,6 +69,13 @@ create_missing_folders()
 # set up logging for subsequent imports
 import logging
 import logging.config
+
+# This needed to prevent exception on Python 2.5:
+# NameError: name 'gluon' is not defined
+# See http://bugs.python.org/issue1436
+import gluon.messageboxhandler
+logging.gluon = gluon
+
 logpath = abspath("logging.conf")
 if os.path.exists(logpath):
     logging.config.fileConfig(abspath("logging.conf"))
@@ -430,7 +438,7 @@ def wsgibase(environ, responder):
                                    web2py_error='invalid application')
                 elif not request.is_local and \
                         os.path.exists(os.path.join(request.folder,'DISABLED')):
-                    raise HTTP(200, "<html><body><h1>Down for maintenance</h1></body></html>")
+                    raise HTTP(503, "<html><body><h1>Temporarily down for maintenance</h1></body></html>")
                 request.url = Url(r=request, args=request.args,
                                        extension=request.raw_extension)
 
@@ -515,8 +523,10 @@ def wsgibase(environ, responder):
 
                 if response.do_not_commit is True:
                     BaseAdapter.close_all_instances(None)
-                elif response._custom_commit:
-                    response._custom_commit()
+                # elif response._custom_commit:
+                #     response._custom_commit()
+                elif response.custom_commit:
+                    BaseAdapter.close_all_instances(response.custom_commit)
                 else:
                     BaseAdapter.close_all_instances('commit')
 
@@ -532,10 +542,9 @@ def wsgibase(environ, responder):
                 # ##################################################
 
                 if request.cid:
-
                     if response.flash and not 'web2py-component-flash' in http_response.headers:
                         http_response.headers['web2py-component-flash'] = \
-                            str(response.flash).replace('\n','')
+                            urllib2.quote(str(response.flash).replace('\n',''))
                     if response.js and not 'web2py-component-command' in http_response.headers:
                         http_response.headers['web2py-component-command'] = \
                             response.js.replace('\n','')
@@ -829,6 +838,7 @@ class HttpServer(object):
             os.unlink(self.pid_filename)
         except:
             pass
+
 
 
 

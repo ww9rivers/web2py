@@ -219,14 +219,16 @@ class cronlauncher(threading.Thread):
         threading.Thread.__init__(self)
         if platform.system() == 'Windows':
             shell = False
-        elif isinstance(cmd,list):
-            cmd = ' '.join(cmd)
         self.cmd = cmd
         self.shell = shell
 
     def run(self):
         import subprocess
-        proc = subprocess.Popen(self.cmd,
+        if isinstance(self.cmd, (list,tuple)):
+            cmd = self.cmd
+        else:
+            cmd = self.cmd.split()
+        proc = subprocess.Popen(cmd,
                                 stdin=subprocess.PIPE,
                                 stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE,
@@ -333,6 +335,7 @@ def crondance(applications_parent, ctype='soft', startup=False):
                     'WEB2PY CRON: Execution error for %s: %s' \
                         % (task.get('cmd'), e))
     token.release()
+
 
 
 
