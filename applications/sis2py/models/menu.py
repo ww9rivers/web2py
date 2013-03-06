@@ -41,9 +41,15 @@ response.menu = [
     (T('Admin'), False, URL('team', 'default', 'design/%s' % request.application),
      [
             (T('Classes'), False, URL('class', 'admin')),
-            (T('Classroom'), False, URL('class', 'room')),
+            (T('Classrooms'), False, URL('class', 'rooms')),
             (T('Finances'), False, URL('admin', 'finance')),
-            (T('Users'), False, URL('admin', 'users')),
+            (T('Users'), False, URL('admin', 'users'),
+             [
+                    (T('Administrator'), False, URL('admin','admin')),
+                    (T('Parent'), False, URL('admin','parent')),
+                    (T('Student'), False, URL('admin','student')),
+                    (T('Teacher'), False, URL('admin','teacher')),
+                    ]),
             (T('Database'), False,
              URL(request.application, 'appadmin', 'index')),
             ]

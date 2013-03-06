@@ -98,7 +98,20 @@ del { text-decoration: line-through; }
 abbr[title], dfn[title] { border-bottom:1px dotted #000; cursor:help; }
 
 /* tables still need cellspacing="0" in the markup */
-table { border-collapse:collapse; border-spacing:0; }
+table { /* border-collapse: collapse; */ border-spacing:1; }
+thead th {
+    text-align: center;
+    border-bottom: 1px solid #444;
+}
+thead tr td {
+    text-align: center;
+    border-bottom: 1px solid #444;
+    background-color: #E0E0E0;
+    padding: 1px;
+}
+thead tr td div {
+    margin: 0 4px;
+}
 
 hr { display:block; height:1px; border:0; border-top:1px solid #ccc; margin:1em 0; padding:0; }
 
@@ -268,10 +281,7 @@ label {
 label, b, th {
     font-weight: bold;
 }
-thead th {
-    text-align: center;
-    border-bottom: 1px solid #444;
-}
+
 /*********** forms and table padding ***********/
 form, table {
    padding: 5px 10px 5px 10px;

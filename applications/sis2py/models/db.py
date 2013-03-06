@@ -60,6 +60,7 @@ auth.settings.extra_fields[auth.settings.table_user_name] =\
      Field('zip', length=12, requires=IS_IN_DB(db, 'zip.id', db.zip._format, multiple=False))]
 auth.settings.hmac_key = 'sha512:4a4dd9ee-fed0-40b2-a195-a363579e087a'   # before define_tables()
 auth.define_tables()                           # creates all needed tables
+db.auth_user._format='%(first_name)s %(last_name)s'
 auth.settings.mailer = mail                    # for user email verification
 auth.settings.registration_requires_verification = False
 auth.settings.registration_requires_approval = False
@@ -84,15 +85,55 @@ db.define_table('classroom',
                 Field('room', length=16, label=T('Room')),
                 Field('campus', length=16),
                 Field('building', length=16),
-                Field('capacity', 'integer'))
+                Field('capacity', 'integer'),
+                format='%(campus)s-%(building)s-%(room)s')
 
 ##      Classinfo: data for a class at the school
 db.define_table('classinfo',
                 Field('course', length=32, label=T('Class')),
                 Field('teacher', db.auth_user), # must be in 'teacher' auth_group
                 Field('schedule', 'time'),
-                Field('count', 'integer', label=T('Enrollment')),
+                Field('count', 'integer', label=T('Enrollment'), writable=False),
                 Field('max', 'integer', label=T('Capacity')), # maximum enrollment
                 Field('room', db.classroom),
                 Field('intro', length=80, label=T('Introduction')),
                 Field('description', 'text'))
+
+class IS_A_USER:
+    '''
+    A validator to check if a given value is a user id, optionally with a specified role.
+    '''
+    def __init__(self,
+                 role=None,
+                 error_message='User has no role based authorization',
+                 no_such_role='No such role',
+                 no_such_user='No such user'):
+        self.role_id = auth.id_group(role) if role != None else ''
+        self.role = role
+
+    def __call__(self, value):
+        '''
+        Check if a given user (value) has the specified role.
+        '''
+        rows = db(db.auth_user.id == value).select()
+        if not rows:
+            return (value, self.no_such_user)
+
+        if self.role != None:
+            user_id = rows[0].id
+            roles = db(db.auth_membership.user_id == value and db.auth_membership.group_id == self.role_id).select()
+            if roles:
+                return (value, self.error_message)
+        return (value, None)
+
+##      Guardian: Parent/student relationship
+db.define_table('guardian',
+                Field('parent', db.auth_user, requires=IS_A_USER('parent')),
+                Field('child', db.auth_user, requires=IS_A_USER('student')),
+                Field('confirmed', 'boolean', default=False, required=True),
+                )
+
+##      Enrollment: Class/student relationship (multi-to-multi)
+db.define_table('enrollment',
+                Field('student', db.auth_user, requires=IS_A_USER('student')),
+                Field('enrolled', db.classinfo, requires=IS_IN_DB(db, 'db.classinfo')))

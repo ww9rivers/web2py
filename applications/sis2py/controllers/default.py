@@ -14,7 +14,11 @@ def index():
     example action using the internationalization operator T and flash
     rendered by views/default/index.html or views/generic.html
     """
-    return dict(message=T('Hello World'))
+    html = P(SPAN('The home page main content is still being developed. Please '),
+             SPAN(''  if auth.is_logged_in() else [A('login', _href=URL('user/login')), ' and ']),
+             SPAN('try other menu entries.'))
+    return dict(message=T('School Information System'),
+                main_content=html)
 
 def user():
     """
