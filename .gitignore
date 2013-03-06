@@ -36,13 +36,13 @@ parameters*.py
 ./admin.w2p
 ./examples.w2p
 cron.master
-applications/*
-!applications/welcome
-!applications/welcome/*
-!applications/examples
-!applications/examples/*
-!applications/admin
-!applications/admin/*
+!applications/*
+applications/welcome
+applications/welcome/*
+applications/examples
+applications/examples/*
+applications/admin
+applications/admin/*
 applications/*/databases/*
 applications/*/sessions/*
 applications/*/errors/*
@@ -52,5 +52,3 @@ applications/*/*.py[oc]
 applications/examples/static/epydoc
 applications/examples/static/sphinx
 applications/admin/cron/cron.master
-
-
