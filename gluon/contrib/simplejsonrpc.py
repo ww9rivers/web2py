@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by the
@@ -46,8 +45,10 @@ class JSONDummyParser:
     "json wrapper for xmlrpclib parser interfase"
     def __init__(self):
         self.buf = StringIO()
+
     def feed(self, data):
         self.buf.write(data)
+
     def close(self):
         return self.buf.getvalue()
 
@@ -72,6 +73,7 @@ class JSONTransportMixin:
 class JSONTransport(JSONTransportMixin, Transport):
     pass
 
+
 class JSONSafeTransport(JSONTransportMixin, SafeTransport):
     pass
 
@@ -79,7 +81,7 @@ class JSONSafeTransport(JSONTransportMixin, SafeTransport):
 class ServerProxy(object):
     "JSON RPC Simple Client Service Proxy"
 
-    def __init__(self,  uri, transport=None, encoding=None, verbose=0):
+    def __init__(self, uri, transport=None, encoding=None, verbose=0):
         self.location = uri             # server location (url)
         self.trace = verbose            # show debug messages
         self.exceptions = True          # raise errors? (JSONRPCError)
@@ -88,7 +90,7 @@ class ServerProxy(object):
 
         type, uri = urllib.splittype(uri)
         if type not in ("http", "https"):
-            raise IOError, "unsupported JSON-RPC protocol"
+            raise IOError("unsupported JSON-RPC protocol")
         self.__host, self.__handler = urllib.splithost(uri)
 
         if transport is None:
@@ -118,7 +120,7 @@ class ServerProxy(object):
             self.__handler,
             request,
             verbose=self.__verbose
-            )
+        )
 
         # store plain request and response for further debugging
         self.json_request = request
@@ -148,5 +150,3 @@ if __name__ == "__main__":
     location = "http://www.web2py.com.ar/webservices/sample/call/jsonrpc"
     client = ServerProxy(location, verbose='--verbose' in sys.argv,)
     print client.add(1, 2)
-
-

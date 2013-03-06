@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
-from distutils.core import setup
+from setuptools import setup
 from gluon.fileutils import tar, untar, read_file, write_file
 import tarfile
 import sys
+
 
 def tar(file, filelist, expression='^.+$'):
     """
@@ -21,9 +22,10 @@ def tar(file, filelist, expression='^.+$'):
     finally:
         tar.close()
 
+
 def start():
     if 'sdist' in sys.argv:
-        tar('gluon/env.tar',['applications','VERSION','splashlogo.gif'])
+        tar('gluon/env.tar', ['applications', 'VERSION', 'splashlogo.gif'])
 
     setup(name='web2py',
           version=read_file("VERSION").split()[1],
@@ -45,10 +47,10 @@ def start():
         """,
           author='Massimo Di Pierro',
           author_email='mdipierro@cs.depaul.edu',
-          license = 'http://web2py.com/examples/default/license',
-          classifiers = ["Development Status :: 5 - Production/Stable"],
+          license='http://web2py.com/examples/default/license',
+          classifiers=["Development Status :: 5 - Production/Stable"],
           url='http://web2py.com',
-          platforms ='Windows, Linux, Mac, Unix,Windows Mobile',
+          platforms='Windows, Linux, Mac, Unix,Windows Mobile',
           packages=['gluon',
                     'gluon/contrib',
                     'gluon/contrib/gateways',
@@ -56,15 +58,15 @@ def start():
                     'gluon/contrib/markdown',
                     'gluon/contrib/markmin',
                     'gluon/contrib/memcache',
-                    'gluon/contrib/pyfpdf',
+                    'gluon/contrib/fpdf',
                     'gluon/contrib/pymysql',
                     'gluon/contrib/pyrtf',
                     'gluon/contrib/pysimplesoap',
                     'gluon/contrib/simplejson',
                     'gluon/tests',
                     ],
-          package_data = {'gluon':['env.tar']},
-          scripts = ['w2p_apps','w2p_run','w2p_clone'],
+          package_data={'gluon': ['env.tar']},
+          scripts=['w2p_apps', 'w2p_run', 'w2p_clone'],
           )
 
 if __name__ == '__main__':
@@ -77,6 +79,3 @@ if __name__ == '__main__':
     #s = raw_input('>')
     #if s.lower()[:1]=='y':
     start()
-
-
-

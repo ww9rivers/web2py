@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-    Unit tests for gluon.sql
+    Unit tests for gluon.dal
 """
 
 import sys
@@ -13,6 +13,10 @@ else:
 
 import unittest
 import datetime
+try:
+    import cStringIO as StringIO
+except:
+    from io import StringIO
 from dal import DAL, Field, Table, SQLALL
 
 ALLOWED_DATATYPES = [
@@ -27,6 +31,7 @@ ALLOWED_DATATYPES = [
     'datetime',
     'upload',
     'password',
+    'json',
     ]
 
 
@@ -58,14 +63,14 @@ class TestFields(unittest.TestCase):
 
     def testFieldTypes(self):
 
-        # Check that string, text, and password default length is 512
+        # Check that string, and password default length is 512
         for typ in ['string', 'password']:
             self.assert_(Field('abc', typ).length == 512,
                          "Default length for type '%s' is not 512 or 255" % typ)
 
         # Check that upload default length is 512
         self.assert_(Field('abc', 'upload').length == 512,
-                     "Default length for type 'upload' is not 128")
+                     "Default length for type 'upload' is not 512")
 
         # Check that Tables passed in the type creates a reference
         self.assert_(Field('abc', Table(None, 'temp')).type
@@ -109,6 +114,10 @@ class TestFields(unittest.TestCase):
         self.assertEqual(db.t.insert(a=True), 1)
         self.assertEqual(db().select(db.t.a)[0].a, True)
         db.t.drop()
+        db.define_table('t', Field('a', 'json', default={}))
+        self.assertEqual(db.t.insert(a={}), 1)
+        self.assertEqual(db().select(db.t.a)[0].a, {})
+        db.t.drop()
         db.define_table('t', Field('a', 'date',
                         default=datetime.date.today()))
         t0 = datetime.date.today()
@@ -128,6 +137,26 @@ class TestFields(unittest.TestCase):
             )
         self.assertEqual(db.t.insert(a=t0), 1)
         self.assertEqual(db().select(db.t.a)[0].a, t0)
+
+        ## Row APIs
+        row = db().select(db.t.a)[0]
+        self.assertEqual(db.t[1].a,t0)
+        self.assertEqual(db.t['a'],db.t.a)
+        self.assertEqual(db.t(1).a,t0)
+        self.assertTrue(db.t(1,a=None)==None)
+        self.assertFalse(db.t(1,a=t0)==None)
+        self.assertEqual(row.a,t0)
+        self.assertEqual(row['a'],t0)
+        self.assertEqual(row['t.a'],t0)
+        self.assertEqual(row('t.a'),t0)
+
+        ## Lazy and Virtual fields
+        db.t.b = Field.Virtual(lambda row: row.t.a)
+        db.t.c = Field.Lazy(lambda row: row.t.a)
+        row = db().select(db.t.a)[0]
+        self.assertEqual(row.b,t0)
+        self.assertEqual(row.c(),t0)
+
         db.t.drop()
         db.define_table('t', Field('a', 'time', default='11:30'))
         t0 = datetime.time(10, 30, 55)
@@ -155,9 +184,9 @@ class TestTable(unittest.TestCase):
         self.assertRaises(SyntaxError, Table, None, 'test', None)
 
         persons = Table(None, 'persons',
-                        Field('firstname','string'), 
+                        Field('firstname','string'),
                         Field('lastname', 'string'))
-        
+
         # Does it have the correct fields?
 
         self.assert_(set(persons.fields).issuperset(set(['firstname',
@@ -256,6 +285,22 @@ class TestBelongs(unittest.TestCase):
         db.t.drop()
 
 
+class TestContains(unittest.TestCase):
+    def testRun(self):
+        db = DAL('sqlite:memory:')
+        db.define_table('t', Field('a', 'list:string'))
+        self.assertEqual(db.t.insert(a=['aaa','bbb']), 1)
+        self.assertEqual(db.t.insert(a=['bbb','ddd']), 2)
+        self.assertEqual(db.t.insert(a=['eee','aaa']), 3)
+        self.assertEqual(len(db(db.t.a.contains('aaa')).select()),
+                         2)
+        self.assertEqual(len(db(db.t.a.contains('bbb')).select()),
+                         2)
+        self.assertEqual(len(db(db.t.a.contains('aa')).select()),
+                         0)
+        db.t.drop()
+
+
 class TestLike(unittest.TestCase):
 
     def testRun(self):
@@ -275,6 +320,11 @@ class TestLike(unittest.TestCase):
                          1)
         self.assertEqual(len(db(db.t.a.upper().like('%C')).select()), 1)
         db.t.drop()
+        db.define_table('t', Field('a', 'integer'))
+        self.assertEqual(db.t.insert(a=1111111111), 1)
+        self.assertEqual(len(db(db.t.a.like('1%')).select()), 1)
+        self.assertEqual(len(db(db.t.a.like('2%')).select()), 0)
+        db.t.drop()
 
 
 class TestDatetime(unittest.TestCase):
@@ -290,12 +340,13 @@ class TestDatetime(unittest.TestCase):
                          9, 30)), 3)
         self.assertEqual(len(db(db.t.a == datetime.datetime(1971, 12,
                          21, 11, 30)).select()), 1)
-        self.assertEqual(len(db(db.t.a.year() == 1971).select()), 2)
-        self.assertEqual(len(db(db.t.a.month() == 12).select()), 2)
-        self.assertEqual(len(db(db.t.a.day() == 21).select()), 3)
-        self.assertEqual(len(db(db.t.a.hour() == 11).select()), 1)
-        self.assertEqual(len(db(db.t.a.minutes() == 30).select()), 3)
-        self.assertEqual(len(db(db.t.a.seconds() == 0).select()), 3)
+        self.assertEqual(db(db.t.a.year() == 1971).count(), 2)
+        self.assertEqual(db(db.t.a.month() == 12).count(), 2)
+        self.assertEqual(db(db.t.a.day() == 21).count(), 3)
+        self.assertEqual(db(db.t.a.hour() == 11).count(), 1)
+        self.assertEqual(db(db.t.a.minutes() == 30).count(), 3)
+        self.assertEqual(db(db.t.a.seconds() == 0).count(), 3)
+        self.assertEqual(db(db.t.a.epoch()<365*24*3600).count(),1)
         db.t.drop()
 
 
@@ -308,7 +359,7 @@ class TestExpressions(unittest.TestCase):
         self.assertEqual(db.t.insert(a=2), 2)
         self.assertEqual(db.t.insert(a=3), 3)
         self.assertEqual(db(db.t.a == 3).update(a=db.t.a + 1), 1)
-        self.assertEqual(len(db(db.t.a == 4).select()), 1)
+        self.assertEqual(db(db.t.a == 4).count(), 1)
         db.t.drop()
 
 
@@ -368,6 +419,17 @@ class TestJoin(unittest.TestCase):
         db.t1.drop()
         db.t2.drop()
 
+        db.define_table('person',Field('name'))
+        id = db.person.insert(name="max")
+        self.assertEqual(id.name,'max')
+        db.define_table('dog',Field('name'),Field('owner','reference person'))
+        db.dog.insert(name='skipper',owner=1)
+        row = db(db.person.id==db.dog.owner).select().first()
+        self.assertEqual(row[db.person.name],'max')
+        self.assertEqual(row['person.name'],'max')
+        db.dog.drop()
+        self.assertEqual(len(db.person._referenced_by),0)
+        db.person.drop()
 
 class TestMinMaxSum(unittest.TestCase):
 
@@ -379,26 +441,34 @@ class TestMinMaxSum(unittest.TestCase):
         self.assertEqual(db.t.insert(a=3), 3)
         s = db.t.a.min()
         self.assertEqual(db(db.t.id > 0).select(s)[0]._extra[s], 1)
+        self.assertEqual(db(db.t.id > 0).select(s).first()[s], 1)
+        self.assertEqual(db().select(s).first()[s], 1)
         s = db.t.a.max()
-        self.assertEqual(db(db.t.id > 0).select(s)[0]._extra[s], 3)
+        self.assertEqual(db().select(s).first()[s], 3)
         s = db.t.a.sum()
-        self.assertEqual(db(db.t.id > 0).select(s)[0]._extra[s], 6)
+        self.assertEqual(db().select(s).first()[s], 6)
         s = db.t.a.count()
-        self.assertEqual(db(db.t.id > 0).select(s)[0]._extra[s], 3)
+        self.assertEqual(db().select(s).first()[s], 3)
         db.t.drop()
 
 
-#class TestCache(unittest.
-#    def testRun(self):
-#        cache = cache.ram
-#        db = DAL('sqlite:memory:')
-#        db.define_table('t', Field('a'))
-#        db.t.insert(a='1')
-#        r1 = db().select(db.t.ALL, cache=(cache, 1000))
-#        db.t.insert(a='1')
-#        r2 = db().select(db.t.ALL, cache=(cache, 1000))
-#        self.assertEqual(r1.response, r2.response)
-#        db.t.drop()
+class TestCache(unittest.TestCase):
+    def testRun(self):
+        from cache import CacheInRam
+        cache = CacheInRam()
+        db = DAL('sqlite:memory:')
+        db.define_table('t', Field('a'))
+        db.t.insert(a='1')
+        r0 = db().select(db.t.ALL)
+        r1 = db().select(db.t.ALL, cache=(cache, 1000))
+        self.assertEqual(len(r0),len(r1))
+        r2 = db().select(db.t.ALL, cache=(cache, 1000))
+        self.assertEqual(len(r0),len(r2))
+        r3 = db().select(db.t.ALL, cache=(cache, 1000), cacheable=True)
+        self.assertEqual(len(r0),len(r3))
+        r4 = db().select(db.t.ALL, cache=(cache, 1000), cacheable=True)
+        self.assertEqual(len(r0),len(r4))
+        db.t.drop()
 
 
 class TestMigrations(unittest.TestCase):
@@ -407,18 +477,22 @@ class TestMigrations(unittest.TestCase):
         db = DAL('sqlite://.storage.db')
         db.define_table('t', Field('a'), migrate='.storage.table')
         db.commit()
+        db.close()
         db = DAL('sqlite://.storage.db')
         db.define_table('t', Field('a'), Field('b'),
                         migrate='.storage.table')
         db.commit()
+        db.close()
         db = DAL('sqlite://.storage.db')
         db.define_table('t', Field('a'), Field('b', 'text'),
                         migrate='.storage.table')
         db.commit()
+        db.close()
         db = DAL('sqlite://.storage.db')
         db.define_table('t', Field('a'), migrate='.storage.table')
         db.t.drop()
         db.commit()
+        db.close()
 
     def tearDown(self):
         if os.path.exists('.storage.db'):
@@ -481,6 +555,156 @@ class TestVirtualFields(unittest.TestCase):
         db.t.virtualfields.append(Compute())
         assert db(db.t.id>0).select().first().a_upper == 'TEST'
         db.t.drop()
+        db.commit()
+
+class TestComputedFields(unittest.TestCase):
+
+    def testRun(self):
+        db = DAL('sqlite:memory:')
+        db.define_table('t',
+                        Field('a'),
+                        Field('b',default='x'),
+                        Field('c',compute=lambda r: r.a+r.b))
+        db.commit()
+        id = db.t.insert(a="z")
+        self.assertEqual(db.t[id].c,'zx')
+        db.t.drop()
+        db.commit()
+
+class TestImportExportFields(unittest.TestCase):
+
+    def testRun(self):
+        db = DAL('sqlite:memory:')
+        db.define_table('person', Field('name'))
+        db.define_table('pet',Field('friend',db.person),Field('name'))
+        for n in range(2):
+            db(db.pet).delete()
+            db(db.person).delete()
+            for k in range(10):
+                id = db.person.insert(name=str(k))
+                db.pet.insert(friend=id,name=str(k))
+        db.commit()
+        stream = StringIO.StringIO()
+        db.export_to_csv_file(stream)
+        db(db.pet).delete()
+        db(db.person).delete()
+        stream = StringIO.StringIO(stream.getvalue())
+        db.import_from_csv_file(stream)
+        assert db(db.person.id==db.pet.friend)(db.person.name==db.pet.name).count()==10
+        db.pet.drop()
+        db.person.drop()
+        db.commit()
+
+class TestImportExportUuidFields(unittest.TestCase):
+
+    def testRun(self):
+        db = DAL('sqlite:memory:')
+        db.define_table('person', Field('name'),Field('uuid'))
+        db.define_table('pet',Field('friend',db.person),Field('name'))
+        for n in range(2):
+            db(db.pet).delete()
+            db(db.person).delete()
+            for k in range(10):
+                id = db.person.insert(name=str(k),uuid=str(k))
+                db.pet.insert(friend=id,name=str(k))
+        db.commit()
+        stream = StringIO.StringIO()
+        db.export_to_csv_file(stream)
+        stream = StringIO.StringIO(stream.getvalue())
+        db.import_from_csv_file(stream)
+        assert db(db.person).count()==10
+        assert db(db.person.id==db.pet.friend)(db.person.name==db.pet.name).count()==20
+        db.pet.drop()
+        db.person.drop()
+        db.commit()
+
+
+class TestDALDictImportExport(unittest.TestCase):
+
+    def testRun(self):
+        db = DAL('sqlite:memory:')
+        db.define_table('person', Field('name', default="Michael"),Field('uuid'))
+        db.define_table('pet',Field('friend',db.person),Field('name'))
+        dbdict = db.as_dict(flat=True, sanitize=False)
+        assert isinstance(dbdict, dict)
+        uri = dbdict["uri"]
+        assert isinstance(uri, basestring) and uri
+        assert len(dbdict["items"]) == 2
+        assert len(dbdict["items"]["person"]["items"]) == 3
+        assert dbdict["items"]["person"]["items"]["name"]["type"] == db.person.name.type
+        assert dbdict["items"]["person"]["items"]["name"]["default"] == db.person.name.default
+        assert dbdict
+
+        db2 = DAL(dbdict)
+        assert len(db.tables) == len(db2.tables)
+        assert hasattr(db2, "pet") and isinstance(db2.pet, Table)
+        assert hasattr(db2.pet, "friend") and isinstance(db2.pet.friend, Field)
+
+        have_serializers = True
+
+        try:
+            import serializers
+            dbjson = db.as_json(sanitize=False)
+            assert isinstance(dbjson, basestring) and len(dbjson) > 0
+            db3 = DAL(serializers.loads_json(dbjson))
+            assert hasattr(db3, "person") and hasattr(db3.person, "uuid") and\
+            db3.person.uuid.type == db.person.uuid.type
+            db3.pet.drop()
+            db3.person.drop()
+            db3.commit()
+        except ImportError:
+            pass
+
+        mpfc = "Monty Python's Flying Circus"
+        dbdict4 = {"uri": 'sqlite:memory:',
+                   "items":{"staff":{"items": {"name":
+                                                   {"default":"Michael"},
+                                               "food":
+                                                   {"default":"Spam"},
+                                               "show":
+                                                   {"type": "reference show"}
+                                               }},
+                            "show":{"items": {"name":
+                                                   {"default":mpfc},
+                                              "rating":
+                                                   {"type":"double"}}}}}
+        db4 = DAL(dbdict4)
+        assert "staff" in db4.tables
+        assert "name" in db4.staff
+        assert db4.show.rating.type == "double"
+        assert (db4.show.insert(), db4.show.insert(name="Loriot"),
+                db4.show.insert(name="Il Mattatore")) == (1, 2, 3)
+        assert db4(db4.show).select().first().id == 1
+        assert db4(db4.show).select().first().name == mpfc
+
+        dbdict5 = {"uri": 'sqlite:memory:'}
+        db5 = DAL(dbdict5)
+        assert db5.tables in ([], None)
+        assert not (str(db5) in ("", None))
+
+        dbdict6 = {"uri": 'sqlite:memory:',
+                   "items":{"staff":{},
+                            "show":{"items": {"name": {},
+                                              "rating":
+                                                 {"type":"double"}}}}}
+        db6 = DAL(dbdict6)
+        assert len(db6["staff"].fields) == 1
+        assert "name" in db6["show"].fields
+
+        assert db6.staff.insert() is not None
+        assert db6(db6.staff).select().first().id == 1
+
+        db6.staff.drop()
+        db6.show.drop()
+        db6.commit()
+        db4.staff.drop()
+        db4.show.drop()
+        db4.commit()
+        db2.pet.drop()
+        db2.person.drop()
+        db2.commit()
+        db.pet.drop()
+        db.person.drop()
         db.commit()
 
 

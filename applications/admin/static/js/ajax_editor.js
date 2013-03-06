@@ -10,14 +10,14 @@ function prepareMultiPartPOST(data) {
     var boundary = '' + Math.floor(Math.random()*10000);
     var reqdata = '--' + boundary + '\r\n';
     //console.log(data.length);
-    for (var i=0;i < data.length;i++)
-	{
-	    reqdata += 'content-disposition: form-data; name="' + data[i].Name + '"';
-	    reqdata += "\r\n\r\n" ;
-	    reqdata +=  data[i].Data;
-	    reqdata += "\r\n" ;
-	    reqdata += '--' + boundary + '\r\n';
-	}
+    for (var i=0;i < data.length;i++) {
+	reqdata += 'content-disposition: form-data; name="';
+	reqdata += data[i].Name + '"';
+	reqdata += "\r\n\r\n" ;
+	reqdata +=  data[i].Data;
+	reqdata += "\r\n" ;
+	reqdata += '--' + boundary + '\r\n';
+    }
     return new Array(reqdata,boundary);
 }
 
@@ -27,101 +27,121 @@ function on_error() {
 }
 
 function getData() {
-    try {
+    if (window.ace_editor) {
         var data = window.ace_editor.getSession().getValue();
-    } catch(e) {
-        try {
-            var data = eamy.instances[0].getText();
-        } catch(e) {
-            var data = area.textarea.value;
-        }
+    } else if (window.mirror) {
+	var data = window.mirror.getValue();
+    } else if (window.eamy) {
+	var data = window.eamy.instances[0].getText();
+    } else if (window.textarea) {
+	var data = textarea.value;
     }
     return data;
 }
 
 function doHighlight(highlight) {
-	try {
-		window.ace_editor.gotoLine(highlight.lineno);
-	} catch(e) {
-		editAreaLoader.setSelectionRange('body', highlight.start, highlight.end);
-	}					
+    if (window.ace_editor) {
+	window.ace_editor.gotoLine(highlight.lineno);
+    } else if (window.mirror) {
+        // Put the cursor at the offending line:
+        window.mirror.setCursor({line:highlight.lineno-1,
+                                 ch:highlight.offset+1});
+    } else if (window.eamy) {
+	// not implemented
+    } else if (window.textarea) {
+	editAreaLoader.setSelectionRange('body', highlight.start, highlight.end);
+    }
 }
 
 function doClickSave() {
     var data = getData();
     var dataForPost = prepareMultiPartPOST(new Array(
 	prepareDataForSave('data', data),
-	prepareDataForSave('file_hash', jQuery("input[name='file_hash']").val()),
-	prepareDataForSave('saved_on', jQuery("input[name='saved_on']").val()),
-	prepareDataForSave('saved_on', jQuery("input[name='saved_on']").val()),
+	prepareDataForSave('file_hash',
+			   jQuery("input[name='file_hash']").val()),
+	prepareDataForSave('saved_on',
+			   jQuery("input[name='saved_on']").val()),
+	prepareDataForSave('saved_on',
+			   jQuery("input[name='saved_on']").val()),
 	prepareDataForSave('from_ajax','true')));
-    // console.info(area.textarea.value);
-        jQuery("input[name='saved_on']").attr('style','background-color:yellow');
+        // console.info(area.textarea.value);
+        jQuery("input[name='saved_on']").attr('style',
+					      'background-color:yellow');
 	jQuery("input[name='saved_on']").val('saving now...')
 	jQuery.ajax({
 	  type: "POST",
-	  contentType: 'multipart/form-data;boundary="' + dataForPost[1] + '"',
+	  contentType: 'multipart/form-data;boundary="'
+		    + dataForPost[1] + '"',
 	  url: self.location.href,
 	  dataType: "json",
 	  data: dataForPost[0],
 	  timeout: 5000,
-      beforeSend: function(xhr) {
-            xhr.setRequestHeader('web2py-component-location',document.location);
-            xhr.setRequestHeader('web2py-component-element','doClickSave');},
-	  success: function(json,text,xhr){
+          beforeSend: function(xhr) {
+		    xhr.setRequestHeader('web2py-component-location',
+					 document.location);
+		    xhr.setRequestHeader('web2py-component-element',
+					 'doClickSave');
+		},
+          success: function(json,text,xhr){
 
-	        // show flash message (if any)
-	        var flash=decodeURIComponent(xhr.getResponseHeader('web2py-component-flash'));
-            if (flash) jQuery('.flash').html(flash).slideDown();
-            else jQuery('.flash').hide();
+	    // show flash message (if any)
+	    var flash=xhr.getResponseHeader('web2py-component-flash');
+            if (flash) {
+		var flashhtml = decodeURIComponent(flash);
+		jQuery('.flash').html(flashhtml).slideDown();
+	    } else jQuery('.flash').hide();
 
             // reenable disabled submit button
 		    var t=jQuery("input[name='save']");
 		    t.attr('class','');
             t.attr('disabled','');
-
-		    try {
-			if (json.error) {
-			    window.location.href=json.redirect;
-			} else {
-			    // console.info( json.file_hash );
-			    jQuery("input[name='file_hash']").val(json.file_hash);
-			    jQuery("input[name='saved_on']").val(json.saved_on);
-			    if (json.highlight) {
-					doHighlight(json.highlight);
-			    } else {
-			        jQuery("input[name='saved_on']").attr('style','background-color:#99FF99');
-			        jQuery(".flash").delay(1000).fadeOut('slow');
-			    }
-			    // console.info(jQuery("input[name='file_hash']").val());
-
-			    var output = '<b>exposes:</b> ';
-			    for ( var i in json.functions) {
-				output += ' <a href="/' + json.application + '/' + json.controller + '/' + json.functions[i] + '">' + json.functions[i] + '</a>,';
-			    }
-			    if(output!='<b>exposes:</b> ') {
-				jQuery("#exposed").html( output.substring(0, output.length-1));
-			    }
-			}
-                    } catch(e) {
-			on_error();
+	    try {
+		if (json.error) {
+		    window.location.href=json.redirect;
+		} else {
+		    // console.info( json.file_hash );
+		    jQuery("input[name='file_hash']").val(json.file_hash);
+		    jQuery("input[name='saved_on']").val(json.saved_on);
+		    if (json.highlight) {
+			doHighlight(json.highlight);
+		    } else {
+			jQuery("input[name='saved_on']").attr('style','background-color:#99FF99');
+			//jQuery(".flash").delay(1000).fadeOut('slow');
 		    }
+		    // console.info(jQuery("input[name='file_hash']").val());
+		    var output = '<b>exposes:</b> ';
+		    for ( var i in json.functions) {
+			output += ' <a href="/' + json.application + '/' + json.controller + '/' + json.functions[i] + '">' + json.functions[i] + '</a>,';
+		    }
+		    if(output!='<b>exposes:</b> ') {
+			jQuery("#exposed").html( output.substring(0, output.length-1));
+		    }
+		}
+	    } catch(e) { on_error();}
 		},
-	  error: function(json) { on_error(); }
-	});
+		    error: function(json) { on_error(); }
+	    });
 	return false;
 }
 
 function getSelectionRange() {
     var sel;
-    try {
-        sel = {};
+    if (window.ace_editor) {
+	sel = {};
         range = window.ace_editor.getSelectionRange();
         // passing the line number directly, no need to read the text
         sel['start'] = range.start.row;
         sel['end'] = range.end.row;
         sel['data'] = '';
-    } catch(e) {
+    } else if (window.mirror) {
+	sel = {};
+	sel['start'] = window.mirror.getCursor(true).line;
+	sel['end'] = window.mirror.getCursor(false).line;
+	sel['data'] = '';
+    } else if (window.eamy) {
+	sel = {};
+	// not implemented
+    } else if (window.textarea) {
         // passing offset, needs the text to calculate the line:
         sel = editAreaLoader.getSelectionRange('body');
         sel['data'] = getData();
@@ -129,8 +149,12 @@ function getSelectionRange() {
     return sel;
 }
 
-function doToggleBreakpoint(filename, url) {
-	var sel = getSelectionRange();
+function doToggleBreakpoint(filename, url, sel) {
+    if (sel==null) {
+        // use cursor position to determine the breakpoint line
+        // (gutter already tell us the selected line)
+        sel = getSelectionRange();
+    }
     var dataForPost = prepareMultiPartPOST(new Array(
 	prepareDataForSave('filename', filename),
 	prepareDataForSave('sel_start', sel["start"]),
@@ -138,38 +162,85 @@ function doToggleBreakpoint(filename, url) {
 	prepareDataForSave('data', sel['data'])));
 	jQuery.ajax({
 	  type: "POST",
-	  contentType: 'multipart/form-data;boundary="' + dataForPost[1] + '"',
+	  contentType: 'multipart/form-data;boundary="'+dataForPost[1]+'"',
 	  url: url,
 	  dataType: "json",
 	  data: dataForPost[0],
 	  timeout: 5000,
       beforeSend: function(xhr) {
-            xhr.setRequestHeader('web2py-component-location',document.location);
-            xhr.setRequestHeader('web2py-component-element','doSetBreakpoint');},
+	  xhr.setRequestHeader('web2py-component-location',
+			       document.location);
+	  xhr.setRequestHeader('web2py-component-element',
+			       'doSetBreakpoint');},
 	  success: function(json,text,xhr){
-
-	        // show flash message (if any)
-	        var flash=decodeURIComponent(xhr.getResponseHeader('web2py-component-flash'));
-            if (flash) jQuery('.flash').html(flash).slideDown();
-            else jQuery('.flash').hide();
-		    try {
-			if (json.error) {
-			    window.location.href=json.redirect;
-			} else {
-			    // mark the breakpoint if ok=True, remove mark if ok=False
-			    // do nothing if ok = null  
-			    // alert(json.ok + json.lineno);
-			}
-                    } catch(e) {
-			on_error();
-		    }
-
+	     // show flash message (if any)
+	     var flash=xhr.getResponseHeader('web2py-component-flash');
+	     if (flash) {
+				jQuery('.flash').html(decodeURIComponent(flash))
+				.append('<a href="#" class="close">&times;</a>')
+				.slideDown();
+		}
+	     else jQuery('.flash').hide();
+	     try {
+		 if (json.error) {
+		     window.location.href=json.redirect;
+		 } else {
+             if (json.ok==true && window.mirror) {
+    		     // mark the breakpoint if ok=True
+ 		         editor.setMarker(json.lineno-1,
+ 		                         "<span style='color: red'>●</span> %N%")
+ 		     } else if (json.ok==false && window.mirror) {
+    		     // remove mark if ok=False
+ 		         editor.setMarker(json.lineno-1, "%N%")
+ 		     } else {
+    		     // do nothing if ok = null
+    		 }
+		     // alert(json.ok + json.lineno);
+		 }
+	     } catch(e) { on_error(); }
 		},
-	  error: function(json) { on_error(); }
-	});
+		    error: function(json) { on_error(); }
+	    });
 	return false;
 }
 
+// on load, update all breakpoints markers:
+function doListBreakpoints(filename, url) {
+    var dataForPost = prepareMultiPartPOST(new Array(
+	    prepareDataForSave('filename', filename)
+        ));
+     jQuery.ajax({
+	  type: "POST",
+	  contentType: 'multipart/form-data;boundary="'+dataForPost[1]+'"',
+	  url: url,
+	  dataType: "json",
+	  data: dataForPost[0],
+	  timeout: 5000,
+      beforeSend: function(xhr) {
+	  xhr.setRequestHeader('web2py-component-location',
+			       document.location);
+	  xhr.setRequestHeader('web2py-component-element',
+			       'doListBreakpoints');},
+	  success: function(json,text,xhr){
+	     try {
+		     if (json.error) {
+		         window.location.href=json.redirect;
+		     } else {
+                 if (window.mirror) {
+                     for (i in json.breakpoints) {
+                         lineno = json.breakpoints[i];
+            		     // mark the breakpoint if ok=True
+         		         editor.setMarker(lineno-1,
+         		                         "<span style='color: red'>●</span> %N%");
+         		     }
+        		 }
+		     }
+	     } catch(e) { on_error(); }
+      },
+      error: function(json) { on_error(); }
+	});
+	return false;
+}
 
 function keepalive(url) {
 	jQuery.ajax({
@@ -179,4 +250,3 @@ function keepalive(url) {
 	  success: function(){},
 	  error: function(x) { on_error(); } });
 }
-

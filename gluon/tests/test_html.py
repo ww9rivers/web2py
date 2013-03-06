@@ -27,7 +27,7 @@ class TestBareHelpers(unittest.TestCase):
 
     def testHR(self):
         self.assertEqual(HR(_a='1', _b='2').xml(), '<hr a="1" b="2" />')
-        
+
     def testIMG(self):
         self.assertEqual(IMG(_a='1', _b='2').xml(),
                          '<img a="1" b="2" />')
@@ -74,7 +74,7 @@ class TestBareHelpers(unittest.TestCase):
 
     def testFORM(self):
         self.assertEqual(FORM('<>', _a='1', _b='2').xml(),
-                         '<form a="1" action="" b="2" enctype="multipart/form-data" method="post">&lt;&gt;</form>')
+                         '<form a="1" action="#" b="2" enctype="multipart/form-data" method="post">&lt;&gt;</form>')
 
     def testH1(self):
         self.assertEqual(H1('<>', _a='1', _b='2').xml(),
@@ -130,7 +130,7 @@ class TestBareHelpers(unittest.TestCase):
 
     def testOPTION(self):
         self.assertEqual(OPTION('<>', _a='1', _b='2').xml(),
-                         '<option a="1" b="2" value="&lt;&gt;">&lt;&gt;' + \
+                         '<option a="1" b="2" value="&lt;&gt;">&lt;&gt;' +
                          '</option>')
 
     def testP(self):
@@ -149,7 +149,7 @@ class TestBareHelpers(unittest.TestCase):
 
     def testSELECT(self):
         self.assertEqual(SELECT('<>', _a='1', _b='2').xml(),
-                         '<select a="1" b="2">'+ \
+                         '<select a="1" b="2">' +
                          '<option value="&lt;&gt;">&lt;&gt;</option></select>')
 
     def testSPAN(self):
@@ -162,7 +162,7 @@ class TestBareHelpers(unittest.TestCase):
 
     def testTABLE(self):
         self.assertEqual(TABLE('<>', _a='1', _b='2').xml(),
-                         '<table a="1" b="2"><tr><td>&lt;&gt;</td></tr>' + \
+                         '<table a="1" b="2"><tr><td>&lt;&gt;</td></tr>' +
                          '</table>')
 
     def testTBODY(self):
@@ -175,8 +175,8 @@ class TestBareHelpers(unittest.TestCase):
 
     def testTEXTAREA(self):
         self.assertEqual(TEXTAREA('<>', _a='1', _b='2').xml(),
-                        '<textarea a="1" b="2" cols="40" rows="10">&lt;&gt;' + \
-                        '</textarea>')
+                         '<textarea a="1" b="2" cols="40" rows="10">&lt;&gt;' +
+                         '</textarea>')
 
     def testTFOOT(self):
         self.assertEqual(TFOOT('<>', _a='1', _b='2').xml(),

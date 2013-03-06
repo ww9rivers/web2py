@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 #  routers are dictionaries of URL routing parameters.
@@ -61,10 +60,13 @@
 #  map_hyphen: If True (default is False), hyphens in incoming /a/c/f fields are converted
 #       to underscores, and back to hyphens in outgoing URLs.
 #       Language, args and the query string are not affected.
-#  map_static: By default, the default application is not stripped from static URLs.
+#  map_static: By default (None), the default application is not stripped from static URLs.
 #       Set map_static=True to override this policy.
+#       Set map_static=False to map lang/static/file to static/lang/file
 #  acfe_match: regex for valid application, controller, function, extension /a/c/f.e
-#  file_match: regex for valid file (used for static file names)
+#  file_match: regex for valid subpath (used for static file paths)
+#              if file_match does not contain '/', it is uses to validate each element of a static file subpath,
+#              rather than the entire subpath.
 #  args_match: regex for valid args
 #       This validation provides a measure of security.
 #       If it is changed, the application perform its own validation.
@@ -82,11 +84,12 @@
 #         default_language = None,
 #             languages = None,
 #         root_static = ['favicon.ico', 'robots.txt'],
+#         map_static = None,
 #         domains = None,
 #         map_hyphen = False,
-#         acfe_match = r'\w+$',              # legal app/ctlr/fcn/ext
-#         file_match = r'(\w+[-=./]?)+$',    # legal file (path) name
-#         args_match = r'([\w@ -]+[=.]?)+$', # legal arg in args
+#         acfe_match = r'\w+$',                 # legal app/ctlr/fcn/ext
+#         file_match = r'([-+=@$%\w]|(?<=[-+=@$%\w])[./])*$',   # legal static subpath
+#         args_match = r'([\w@ -]|(?<=[\w@ -])[.=])*$',         # legal arg in args
 #     )
 #
 #  See rewrite.map_url_in() and rewrite.map_url_out() for implementation details.
@@ -98,8 +101,8 @@
 routers = dict(
 
     # base router
-    BASE = dict(
-        default_application = 'welcome',
+    BASE=dict(
+        default_application='welcome',
     ),
 )
 
@@ -140,6 +143,7 @@ logging = 'debug'
 
 # error_message = '<html><body><h1>%s</h1></body></html>'
 # error_message_ticket = '<html><body><h1>Internal error</h1>Ticket issued: <a href="/admin/default/ticket/%(ticket)s" target="_blank">%(ticket)s</a></body></html>'
+
 
 def __routes_doctest():
     '''
@@ -205,6 +209,3 @@ def __routes_doctest():
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
-
-
-

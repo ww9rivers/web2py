@@ -12,9 +12,9 @@ Functions required to execute app components
 FOR INTERNAL USE ONLY
 """
 
-import os
-import stat
+from os import stat
 import thread
+import logging
 from fileutils import read_file
 
 cfs = {}  # for speed-up
@@ -34,13 +34,16 @@ def getcfs(key, filename, filter=None):
 
     This is used on Google App Engine since pyc files cannot be saved.
     """
-    t = os.stat(filename)[stat.ST_MTIME]
+    try:
+        t = stat(filename).st_mtime
+    except OSError:
+        return filter() if callable(filter) else ''
     cfs_lock.acquire()
     item = cfs.get(key, None)
     cfs_lock.release()
     if item and item[0] == t:
         return item[1]
-    if not filter:
+    if not callable(filter):
         data = read_file(filename)
     else:
         data = filter()
@@ -48,8 +51,3 @@ def getcfs(key, filename, filter=None):
     cfs[key] = (t, data)
     cfs_lock.release()
     return data
-
-
-
-
-

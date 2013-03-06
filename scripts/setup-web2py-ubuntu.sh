@@ -6,7 +6,7 @@ echo "This script will:
 5) overwrite /etc/apache2/sites-available/default
 6) restart apache.
 
-You may want to read this cript before running it.
+You may want to read this script before running it.
 
 Press a key to continue...[ctrl+C to abort]"
 
@@ -82,11 +82,19 @@ echo "================================================="
 echo '
 NameVirtualHost *:80
 NameVirtualHost *:443
+# If the WSGIDaemonProcess directive is specified outside of all virtual
+# host containers, any WSGI application can be delegated to be run within
+# that daemon process group.
+# If the WSGIDaemonProcess directive is specified
+# within a virtual host container, only WSGI applications associated with
+# virtual hosts with the same server name as that virtual host can be
+# delegated to that set of daemon processes.
+WSGIDaemonProcess web2py user=www-data group=www-data
 
 <VirtualHost *:80>
-  WSGIDaemonProcess web2py user=www-data group=www-data
   WSGIProcessGroup web2py
   WSGIScriptAlias / /home/www-data/web2py/wsgihandler.py
+  WSGIPassAuthorization On
 
   <Directory /home/www-data/web2py>
     AllowOverride None
@@ -123,8 +131,8 @@ NameVirtualHost *:443
   SSLCertificateKeyFile /etc/apache2/ssl/self_signed.key
 
   WSGIProcessGroup web2py
-
   WSGIScriptAlias / /home/www-data/web2py/wsgihandler.py
+  WSGIPassAuthorization On
 
   <Directory /home/www-data/web2py>
     AllowOverride None
