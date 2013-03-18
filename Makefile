@@ -5,7 +5,7 @@ all:
 clean:
 	rm -f httpserver.log 
 	rm -f parameters*.py 
-	rm -f -r applications/*/compiled     	
+	rm -f -r applications/*/compiled
 	find ./ -name '*~' -exec rm -f {} \; 
 	find ./ -name '*.orig' -exec rm -f {} \; 
 	find ./ -name '*.rej' -exec rm -f {} \; 
@@ -30,7 +30,7 @@ update:
 	echo "remember that pymysql was tweaked"
 src:
 	### Use semantic versioning
-	echo 'Version 2.4.2-stable+timestamp.'`date +%Y.%m.%d.%H.%M.%S` > VERSION
+	echo 'Version 2.4.4-stable+timestamp.'`date +%Y.%m.%d.%H.%M.%S` > VERSION
 	### rm -f all junk files
 	make clean
 	### clean up baisc apps

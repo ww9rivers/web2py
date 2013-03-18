@@ -6,6 +6,8 @@
 
 import sys
 import os
+import glob
+
 if os.path.isdir('gluon'):
     sys.path.append(os.path.realpath('gluon'))
 else:
@@ -18,6 +20,11 @@ try:
 except:
     from io import StringIO
 from dal import DAL, Field, Table, SQLALL
+
+#for travis-ci
+DEFAULT_URI = os.environ.get('DB', 'sqlite:memory')
+print 'Testing against %s engine (%s)' % (DEFAULT_URI.partition(':')[0], DEFAULT_URI)
+
 
 ALLOWED_DATATYPES = [
     'string',
@@ -41,6 +48,8 @@ def setUpModule():
 def tearDownModule():
     if os.path.isfile('sql.log'):
         os.unlink('sql.log')
+    for a in glob.glob('*.table'):
+        os.unlink(a)
 
 
 class TestFields(unittest.TestCase):
@@ -96,7 +105,7 @@ class TestFields(unittest.TestCase):
                 isinstance(f.formatter(datetime.datetime.now()), str)
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         for ft in ['string', 'text', 'password', 'upload', 'blob']:
             db.define_table('t', Field('a', ft, default=''))
             self.assertEqual(db.t.insert(a='x'), 1)
@@ -198,7 +207,7 @@ class TestTable(unittest.TestCase):
                       in str(persons.ALL))
 
     def testTableAlias(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         persons = Table(db, 'persons', Field('firstname',
                            'string'), Field('lastname', 'string'))
         aliens = persons.with_alias('aliens')
@@ -221,7 +230,7 @@ class TestTable(unittest.TestCase):
 class TestInsert(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a'))
         self.assertEqual(db.t.insert(a='1'), 1)
         self.assertEqual(db.t.insert(a='1'), 2)
@@ -236,7 +245,7 @@ class TestInsert(unittest.TestCase):
 class TestSelect(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a'))
         self.assertEqual(db.t.insert(a='1'), 1)
         self.assertEqual(db.t.insert(a='2'), 2)
@@ -267,7 +276,7 @@ class TestSelect(unittest.TestCase):
 class TestBelongs(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a'))
         self.assertEqual(db.t.insert(a='1'), 1)
         self.assertEqual(db.t.insert(a='2'), 2)
@@ -287,7 +296,7 @@ class TestBelongs(unittest.TestCase):
 
 class TestContains(unittest.TestCase):
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a', 'list:string'))
         self.assertEqual(db.t.insert(a=['aaa','bbb']), 1)
         self.assertEqual(db.t.insert(a=['bbb','ddd']), 2)
@@ -304,7 +313,7 @@ class TestContains(unittest.TestCase):
 class TestLike(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a'))
         self.assertEqual(db.t.insert(a='abc'), 1)
         self.assertEqual(len(db(db.t.a.like('a%')).select()), 1)
@@ -330,7 +339,7 @@ class TestLike(unittest.TestCase):
 class TestDatetime(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a', 'datetime'))
         self.assertEqual(db.t.insert(a=datetime.datetime(1971, 12, 21,
                          11, 30)), 1)
@@ -353,7 +362,7 @@ class TestDatetime(unittest.TestCase):
 class TestExpressions(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a', 'integer'))
         self.assertEqual(db.t.insert(a=1), 1)
         self.assertEqual(db.t.insert(a=2), 2)
@@ -366,7 +375,7 @@ class TestExpressions(unittest.TestCase):
 class TestJoin(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t1', Field('a'))
         db.define_table('t2', Field('a'), Field('b', db.t1))
         i1 = db.t1.insert(a='1')
@@ -397,27 +406,27 @@ class TestJoin(unittest.TestCase):
         self.assertEqual(db().select(db.t1.ALL, db.t2.ALL,
                          left=db.t2.on(db.t1.id == db.t2.b),
                          orderby=db.t1.a | db.t2.a)[3].t2.a, None)
-        self.assertEqual(len(db().select(db.t1.ALL, db.t2.id.count(),
+        self.assertEqual(len(db().select(db.t1.a, db.t2.id.count(),
                          left=db.t2.on(db.t1.id == db.t2.b),
-                         orderby=db.t1.a | db.t2.a, groupby=db.t1.a)),
+                         orderby=db.t1.a, groupby=db.t1.a)),
                          3)
-        self.assertEqual(db().select(db.t1.ALL, db.t2.id.count(),
+        self.assertEqual(db().select(db.t1.a, db.t2.id.count(),
                          left=db.t2.on(db.t1.id == db.t2.b),
-                         orderby=db.t1.a | db.t2.a,
+                         orderby=db.t1.a,
                          groupby=db.t1.a)[0]._extra[db.t2.id.count()],
                          1)
-        self.assertEqual(db().select(db.t1.ALL, db.t2.id.count(),
+        self.assertEqual(db().select(db.t1.a, db.t2.id.count(),
                          left=db.t2.on(db.t1.id == db.t2.b),
-                         orderby=db.t1.a | db.t2.a,
+                         orderby=db.t1.a,
                          groupby=db.t1.a)[1]._extra[db.t2.id.count()],
                          2)
-        self.assertEqual(db().select(db.t1.ALL, db.t2.id.count(),
+        self.assertEqual(db().select(db.t1.a, db.t2.id.count(),
                          left=db.t2.on(db.t1.id == db.t2.b),
-                         orderby=db.t1.a | db.t2.a,
+                         orderby=db.t1.a,
                          groupby=db.t1.a)[2]._extra[db.t2.id.count()],
                          0)
-        db.t1.drop()
         db.t2.drop()
+        db.t1.drop()
 
         db.define_table('person',Field('name'))
         id = db.person.insert(name="max")
@@ -434,7 +443,7 @@ class TestJoin(unittest.TestCase):
 class TestMinMaxSum(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a', 'integer'))
         self.assertEqual(db.t.insert(a=1), 1)
         self.assertEqual(db.t.insert(a=2), 2)
@@ -456,7 +465,7 @@ class TestCache(unittest.TestCase):
     def testRun(self):
         from cache import CacheInRam
         cache = CacheInRam()
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a'))
         db.t.insert(a='1')
         r0 = db().select(db.t.ALL)
@@ -474,21 +483,21 @@ class TestCache(unittest.TestCase):
 class TestMigrations(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite://.storage.db')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a'), migrate='.storage.table')
         db.commit()
         db.close()
-        db = DAL('sqlite://.storage.db')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a'), Field('b'),
                         migrate='.storage.table')
         db.commit()
         db.close()
-        db = DAL('sqlite://.storage.db')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a'), Field('b', 'text'),
                         migrate='.storage.table')
         db.commit()
         db.close()
-        db = DAL('sqlite://.storage.db')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a'), migrate='.storage.table')
         db.t.drop()
         db.commit()
@@ -500,10 +509,10 @@ class TestMigrations(unittest.TestCase):
         if os.path.exists('.storage.table'):
             os.unlink('.storage.table')
 
-class TestReferece(unittest.TestCase):
+class TestReference(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('name'), Field('a','reference t'))
         db.commit()
         x = db.t.insert(name='max')
@@ -523,7 +532,7 @@ class TestReferece(unittest.TestCase):
 class TestClientLevelOps(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a'))
         db.commit()
         db.t.insert(a="test")
@@ -546,7 +555,7 @@ class TestClientLevelOps(unittest.TestCase):
 class TestVirtualFields(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t', Field('a'))
         db.commit()
         db.t.insert(a="test")
@@ -560,7 +569,7 @@ class TestVirtualFields(unittest.TestCase):
 class TestComputedFields(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('t',
                         Field('a'),
                         Field('b',default='x'),
@@ -574,7 +583,7 @@ class TestComputedFields(unittest.TestCase):
 class TestImportExportFields(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('person', Field('name'))
         db.define_table('pet',Field('friend',db.person),Field('name'))
         for n in range(2):
@@ -598,7 +607,7 @@ class TestImportExportFields(unittest.TestCase):
 class TestImportExportUuidFields(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('person', Field('name'),Field('uuid'))
         db.define_table('pet',Field('friend',db.person),Field('name'))
         for n in range(2):
@@ -622,7 +631,7 @@ class TestImportExportUuidFields(unittest.TestCase):
 class TestDALDictImportExport(unittest.TestCase):
 
     def testRun(self):
-        db = DAL('sqlite:memory:')
+        db = DAL(DEFAULT_URI)
         db.define_table('person', Field('name', default="Michael"),Field('uuid'))
         db.define_table('pet',Field('friend',db.person),Field('name'))
         dbdict = db.as_dict(flat=True, sanitize=False)
@@ -635,28 +644,37 @@ class TestDALDictImportExport(unittest.TestCase):
         assert dbdict["items"]["person"]["items"]["name"]["default"] == db.person.name.default
         assert dbdict
 
+
+
         db2 = DAL(dbdict)
         assert len(db.tables) == len(db2.tables)
         assert hasattr(db2, "pet") and isinstance(db2.pet, Table)
         assert hasattr(db2.pet, "friend") and isinstance(db2.pet.friend, Field)
+        db.pet.drop()
+        db.commit()
+
+        db2.commit()
 
         have_serializers = True
-
         try:
             import serializers
             dbjson = db.as_json(sanitize=False)
             assert isinstance(dbjson, basestring) and len(dbjson) > 0
-            db3 = DAL(serializers.loads_json(dbjson))
+
+            unicode_keys = True
+            if sys.version < "2.6.5":
+                unicode_keys = False
+            db3 = DAL(serializers.loads_json(dbjson,
+                          unicode_keys=unicode_keys))
             assert hasattr(db3, "person") and hasattr(db3.person, "uuid") and\
             db3.person.uuid.type == db.person.uuid.type
-            db3.pet.drop()
             db3.person.drop()
             db3.commit()
         except ImportError:
             pass
 
         mpfc = "Monty Python's Flying Circus"
-        dbdict4 = {"uri": 'sqlite:memory:',
+        dbdict4 = {"uri": DEFAULT_URI,
                    "items":{"staff":{"items": {"name":
                                                    {"default":"Michael"},
                                                "food":
@@ -677,35 +695,39 @@ class TestDALDictImportExport(unittest.TestCase):
         assert db4(db4.show).select().first().id == 1
         assert db4(db4.show).select().first().name == mpfc
 
-        dbdict5 = {"uri": 'sqlite:memory:'}
+        db4.staff.drop()
+        db4.show.drop()
+        db4.commit()
+
+        dbdict5 = {"uri": DEFAULT_URI}
         db5 = DAL(dbdict5)
         assert db5.tables in ([], None)
         assert not (str(db5) in ("", None))
 
-        dbdict6 = {"uri": 'sqlite:memory:',
+        dbdict6 = {"uri": DEFAULT_URI,
                    "items":{"staff":{},
                             "show":{"items": {"name": {},
                                               "rating":
-                                                 {"type":"double"}}}}}
+                                                 {"type":"double"}
+                                                 }
+                                }
+                            }
+                    }
         db6 = DAL(dbdict6)
+
         assert len(db6["staff"].fields) == 1
         assert "name" in db6["show"].fields
 
         assert db6.staff.insert() is not None
         assert db6(db6.staff).select().first().id == 1
 
+
         db6.staff.drop()
         db6.show.drop()
         db6.commit()
-        db4.staff.drop()
-        db4.show.drop()
-        db4.commit()
-        db2.pet.drop()
-        db2.person.drop()
-        db2.commit()
-        db.pet.drop()
-        db.person.drop()
-        db.commit()
+
+
+
 
 
 if __name__ == '__main__':

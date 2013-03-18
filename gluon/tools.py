@@ -22,7 +22,7 @@ import urllib
 import urllib2
 import Cookie
 import cStringIO
-from email import MIMEBase, MIMEMultipart, MIMEText, Encoders, Header, message_from_string
+from email import MIMEBase, MIMEMultipart, MIMEText, Encoders, Header, message_from_string, Charset
 
 from gluon.contenttype import contenttype
 from gluon.storage import Storage, StorageList, Settings, Messages
@@ -347,7 +347,10 @@ class Mail(object):
                      mail.send_mail() method
         self.error: Exception message or None if above was successful
         """
-
+        
+        # We don't want to use base64 encoding for unicode mail
+        Charset.add_charset('utf-8', Charset.QP, Charset.QP, 'utf-8')
+        
         def encode_header(key):
             if [c for c in key if 32 > ord(c) or ord(c) > 127]:
                 return Header.Header(key.encode('utf-8'), 'utf-8')
@@ -1752,19 +1755,45 @@ class Auth(object):
                 self.add_membership(self.settings.everybody_group_id, user_id)
         return user
 
-    def basic(self):
+    def basic(self, basic_auth_realm=False):
         """
         perform basic login.
+
+        :param basic_auth_realm: optional basic http authentication realm.
+        :type basic_auth_realm: str or unicode or function or callable or boolean.
+
         reads current.request.env.http_authorization
-        and returns basic_allowed,basic_accepted,user
+        and returns basic_allowed,basic_accepted,user.
+        
+        if basic_auth_realm is defined is a callable it's return value
+        is used to set the basic authentication realm, if it's a string
+        its content is used instead.  Otherwise basic authentication realm
+        is set to the application name.
+        If basic_auth_realm is None or False (the default) the behavior
+        is to skip sending any challenge.
+        
         """
         if not self.settings.allow_basic_login:
             return (False, False, False)
         basic = current.request.env.http_authorization
+        if basic_auth_realm:
+            if callable(basic_auth_realm):
+                basic_auth_realm = basic_auth_auth()
+            elif isinstance(basic_auth_realm, (unicode, str)):
+                basic_realm = unicode(basic_auth_realm)
+            elif basic_auth_realm is True:
+                basic_realm = u'' + current.request.application
+            http_401 = HTTP(401, u'Not Authorized', 
+                       **{'WWW-Authenticate': u'Basic realm="' + basic_realm + '"'})
         if not basic or not basic[:6].lower() == 'basic ':
+            if basic_auth_realm:
+                raise http_401
             return (True, False, False)
-        (username, password) = base64.b64decode(basic[6:]).split(':')
-        return (True, True, self.login_bare(username, password))
+        (username, sep, password) = base64.b64decode(basic[6:]).partition(':')
+        is_valid_user = sep and self.login_bare(username, password)
+        if not is_valid_user and basic_auth_realm:
+            raise http_401
+        return (True, True, is_valid_user)
 
     def login_user(self, user):
         """
@@ -4402,9 +4431,9 @@ class Service(object):
 
         
             
+        request = current.request
+        response = current.response
         if not data:
-            request = current.request
-            response = current.response
             response.headers['Content-Type'] = 'application/json; charset=utf-8'
             try:
                 data = json_parser.loads(request.body.read())
@@ -4446,6 +4475,8 @@ class Service(object):
                 return return_response(id, s)
             else:
                 return ''
+        except HTTP, e:
+            raise e
         except Service.JsonRpcException, e:
             return return_error(id, e.code, e.info)
         except BaseException:
@@ -4868,7 +4899,7 @@ class Wiki(object):
     everybody = 'everybody'
     rows_page = 25
     def markmin_base(self,body):
-        return MARKMIN(body, extra=self.extra,
+        return MARKMIN(body, extra=self.settings.extra,
                        url=True, environment=self.env,
                        autolinks=lambda link: expand_one(link, {})).xml()
 
@@ -4902,29 +4933,43 @@ class Wiki(object):
         controller, function, args = items[0], items[1], items[2:]
         return LOAD(controller, function, args=args, ajax=True).xml()
 
+    def get_render(self):
+        if isinstance(self.settings.render, basestring):
+            r = getattr(self, "%s_render" % self.settings.render)
+        elif callable(self.settings.render):
+            r = self.settings.render
+        else:
+            raise ValueError("Invalid render type %s" % type(render))
+        return r
+
     def __init__(self, auth, env=None, render='markmin',
                  manage_permissions=False, force_prefix='',
                  restrict_search=False, extra=None,
                  menu_groups=None, templates=None):
+
+        settings = self.settings = Settings()
+
+        # render: "markmin", "html", ..., <function>
+        settings.render = render
+        perms = settings.manage_permissions = manage_permissions
+
+        settings.force_prefix = force_prefix
+        settings.restrict_search = restrict_search
+        settings.extra = extra or {}
+        settings.menu_groups = menu_groups
+        settings.templates = templates
+
         db = auth.db
         self.env = env or {}
         self.env['component'] = Wiki.component
-        if render == 'markmin':
-            render = self.markmin_render
-        elif render == 'html':
-            render = self.html_render
-        self.render = render
         self.auth = auth
-        self.menu_groups = menu_groups
+
         if self.auth.user:
-            self.force_prefix = force_prefix % self.auth.user
+            self.settings.force_prefix = force_prefix % self.auth.user
         else:
-            self.force_prefix = force_prefix
+            self.settings.force_prefix = force_prefix
+
         self.host = current.request.env.http_host
-        perms = self.manage_permissions = manage_permissions
-        self.restrict_search = restrict_search
-        self.extra = extra or {}
-        self.templates = templates
 
         table_definitions = [
             ('wiki_page', {
@@ -4944,7 +4989,8 @@ class Wiki(object):
                               writable=perms, readable=perms,
                               default=[Wiki.everybody]),
                         Field('changelog'),
-                        Field('html', 'text', compute=render,
+                        Field('html', 'text',
+                              compute=self.get_render(),
                               readable=False, writable=False),
                         auth.signature],
               'vars':{'format':'%(title)s'}}),
@@ -4977,8 +5023,9 @@ class Wiki(object):
                 args += value['args']
                 db.define_table(key, *args, **value['vars'])
 
-        if self.templates is None and not self.manage_permissions:
-            self.templates = db.wiki_page.tags.contains('template')&\
+        if self.settings.templates is None and not \
+           self.settings.manage_permissions:
+            self.settings.templates = db.wiki_page.tags.contains('template')&\
                 db.wiki_page.can_read.contains('everybody')
 
         def update_tags_insert(page, id, db=db):
@@ -5002,13 +5049,17 @@ class Wiki(object):
             gid = group.id if group else db.auth_group.insert(
                 role='wiki_editor')
             auth.add_membership(gid)
+
+        settings.lock_keys = True
+
     # WIKI ACCESS POLICY
 
     def not_authorized(self, page=None):
         raise HTTP(401)
 
     def can_read(self, page):
-        if 'everybody' in page.can_read or not self.manage_permissions:
+        if 'everybody' in page.can_read or not \
+            self.settings.manage_permissions:
             return True
         elif self.auth.user:
             groups = self.auth.user_groups.values()
@@ -5038,11 +5089,11 @@ class Wiki(object):
         return True
 
     def can_see_menu(self):
-        if self.menu_groups is None:
+        if self.settings.menu_groups is None:
             return True
         if self.auth.user:
             groups = self.auth.user_groups.values()
-            if any(t in self.menu_groups for t in groups):
+            if any(t in self.settings.menu_groups for t in groups):
                 return True
         return False
 
@@ -5079,7 +5130,7 @@ class Wiki(object):
         elif zero == '_cloud':
             return self.cloud()
         elif zero == '_preview':
-            return self.preview(self.render)
+            return self.preview(self.get_render())
 
     def first_paragraph(self, page):
         if not self.can_read(page):
@@ -5147,9 +5198,9 @@ class Wiki(object):
         title_guess = ' '.join(c.capitalize() for c in slug.split('-'))
         if not page:
             if not (self.can_manage() or
-                    slug.startswith(self.force_prefix)):
+                    slug.startswith(self.settings.force_prefix)):
                 current.session.flash = 'slug must have "%s" prefix' \
-                    % self.force_prefix
+                    % self.settings.force_prefix
                 redirect(URL(args=('_create')))
             db.wiki_page.can_read.default = [Wiki.everybody]
             db.wiki_page.can_edit.default = [auth.user_group_role()]
@@ -5205,7 +5256,10 @@ class Wiki(object):
                 }
             })
         })
-        """ % dict(url=URL(args=('_preview')), urlmedia=URL(extension='load',args=('_editmedia'),vars=dict(embedded=1)))
+        """ % dict(url=URL(args=('_preview', slug)),
+                   urlmedia=URL(extension='load',
+                                args=('_editmedia',slug),
+                                vars=dict(embedded=1)))
         return dict(content=TAG[''](form, SCRIPT(script)))
 
     def editmedia(self, slug):
@@ -5251,14 +5305,15 @@ class Wiki(object):
         options=[OPTION(row.slug,_value=row.id) for row in slugs]
         options.insert(0, OPTION('',_value=''))
         fields = [Field("slug", default=current.request.args(1) or 
-                        self.force_prefix,
+                        self.settings.force_prefix,
                         requires=(IS_SLUG(), IS_NOT_IN_DB(db,db.wiki_page.slug))),]
-        if self.templates:
+        if self.settings.templates:
             fields.append(
                 Field("from_template", "reference wiki_page",
-                      requires=IS_EMPTY_OR(IS_IN_DB(db(self.templates),
-                                                    db.wiki_page._id,
-                                                    '%(slug)s')),
+                      requires=IS_EMPTY_OR(
+                                   IS_IN_DB(db(self.settings.templates),
+                                            db.wiki_page._id,
+                                            '%(slug)s')),
                       comment=current.T(
                         "Choose Template or empty for new Page")))
         form = SQLFORM.factory(*fields, **dict(_class="well span6"))
@@ -5300,7 +5355,7 @@ class Wiki(object):
         request, db = current.request, self.auth.db
         media = db.wiki_media(id)
         if media:
-            if self.manage_permissions:
+            if self.settings.manage_permissions:
                 page = db.wiki_page(media.wiki_page)
                 if not self.can_read(page):
                     return self.not_authorized(page)
@@ -5399,7 +5454,7 @@ class Wiki(object):
                 query = (db.wiki_page.id == db.wiki_tag.wiki_page) &\
                     (db.wiki_tag.name.belongs(tags))
                 query = query | db.wiki_page.title.contains(request.vars.q)
-            if self.restrict_search and not self.manage():
+            if self.settings.restrict_search and not self.manage():
                 query = query & (db.wiki_page.created_by == self.auth.user_id)
             pages = db(query).select(count,
                 *fields, **dict(orderby=orderby or ~count,
@@ -5459,6 +5514,7 @@ class Wiki(object):
     def preview(self, render):
         request = current.request
         return render(request.post_vars)
+
 
 if __name__ == '__main__':
     import doctest
