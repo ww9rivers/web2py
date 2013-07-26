@@ -562,8 +562,8 @@ class TemplateParser(object):
                 if in_tag:
                     line = i
 
-                    # Get rid of '{{' and '}}'
-                    line = line[2:-2].strip()
+                    # Get rid of delimiters
+                    line = line[len(self.delimiters[0]):-len(self.delimiters[1])].strip()
 
                     # This is bad juju, but let's do it anyway
                     if not line:
@@ -800,8 +800,8 @@ class DummyResponse():
     def write(self, data, escape=True):
         if not escape:
             self.body.write(str(data))
-        elif hasattr(data, 'as_html') and callable(data.as_html):
-            self.body.write(data.as_html())
+        elif hasattr(data, 'xml') and callable(data.xml):
+            self.body.write(data.xml())
         else:
             # make it a string
             if not isinstance(data, (str, unicode)):
@@ -832,7 +832,8 @@ def render(content="hello world",
            path=None,
            context={},
            lexers={},
-           delimiters=('{{', '}}')
+           delimiters=('{{', '}}'),
+           writer='response.write'
            ):
     """
     >>> render()
@@ -895,7 +896,7 @@ def render(content="hello world",
 
     # Execute the template.
     code = str(TemplateParser(stream.read(
-    ), context=context, path=path, lexers=lexers, delimiters=delimiters))
+    ), context=context, path=path, lexers=lexers, delimiters=delimiters, writer=writer))
     try:
         exec(code) in context
     except Exception:

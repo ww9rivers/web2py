@@ -29,6 +29,15 @@ import tempfile
 import random
 import string
 import urllib2
+
+try:
+    import simplejson as sj #external installed library
+except:
+    try:
+        import json as sj #standard installed library
+    except:
+        import contrib.simplejson as sj #pure python library
+
 from thread import allocate_lock
 
 from fileutils import abspath, write_file, parse_version, copystream
@@ -63,8 +72,13 @@ import logging.config
 # This needed to prevent exception on Python 2.5:
 # NameError: name 'gluon' is not defined
 # See http://bugs.python.org/issue1436
+
+# attention!, the import Tkinter in messageboxhandler, changes locale ...
 import gluon.messageboxhandler
 logging.gluon = gluon
+# so we must restore it! Thanks ozancag
+import locale
+locale.setlocale(locale.LC_CTYPE, "C") # IMPORTANT, web2py requires locale "C"
 
 exists = os.path.exists
 pjoin = os.path.join
@@ -87,7 +101,7 @@ from settings import global_settings
 from validators import CRYPT
 from cache import CacheInRam
 from html import URL, xmlescape
-from utils import is_valid_ip_address
+from utils import is_valid_ip_address, getipaddrinfo
 from rewrite import load, url_in, THREAD_LOCAL as rwthread, \
     try_rewrite_on_error, fixup_missing_path_info
 import newcron
@@ -158,7 +172,7 @@ def copystream_progress(request, chunk_size=10 ** 5):
         size = int(env.content_length)
     except ValueError:
         raise HTTP(400, "Invalid Content-Length header")
-    dest = tempfile.TemporaryFile()
+    dest = tempfile.NamedTemporaryFile()
     if not 'X-Progress-ID' in request.vars:
         copystream(source, dest, size, chunk_size)
         return dest
@@ -249,52 +263,57 @@ def serve_controller(request, response, session):
     raise HTTP(response.status, page, **response.headers)
 
 
-def start_response_aux(status, headers, exc_info, response=None):
-    """
-    in controller you can use::
-
-    - request.wsgi.environ
-    - request.wsgi.start_response
-
-    to call third party WSGI applications
-    """
-    response.status = str(status).split(' ', 1)[0]
-    response.headers = dict(headers)
-    return lambda *args, **kargs: response.write(escape=False, *args, **kargs)
-
-
-def middleware_aux(request, response, *middleware_apps):
-    """
-    In you controller use::
-
+class LazyWSGI(object):
+    def __init__(self, environ, request, response):
+        self.wsgi_environ = environ
+        self.request = request
+        self.response = response
+    @property
+    def environ(self):
+        if not hasattr(self,'_environ'):
+            new_environ = self.wsgi_environ
+            new_environ['wsgi.input'] = self.request.body
+            new_environ['wsgi.version'] = 1
+            self._environ = new_environ
+        return self._environ
+    def start_response(self,status='200', headers=[], exec_info=None):
+        """
+        in controller you can use::
+        
+        - request.wsgi.environ
+        - request.wsgi.start_response
+        
+        to call third party WSGI applications
+        """
+        self.response.status = str(status).split(' ', 1)[0]
+        self.response.headers = dict(headers)
+        return lambda *args, **kargs: \
+            self.response.write(escape=False, *args, **kargs)
+    def middleware(self,*a):
+        """
+        In you controller use::
+        
         @request.wsgi.middleware(middleware1, middleware2, ...)
+        
+        to decorate actions with WSGI middleware. actions must return strings.
+        uses a simulated environment so it may have weird behavior in some cases
+        """
+        def middleware(f):
+            def app(environ, start_response):
+                data = f()
+                start_response(self.response.status, 
+                               self.response.headers.items())
+                if isinstance(data, list):
+                    return data
+                return [data]
+            for item in middleware_apps:
+                app = item(app)
+            def caller(app):                
+                return app(self.environ, self.start_response)
+            return lambda caller=caller, app=app: caller(app)
+        return middleware
 
-    to decorate actions with WSGI middleware. actions must return strings.
-    uses a simulated environment so it may have weird behavior in some cases
-    """
-    def middleware(f):
-        def app(environ, start_response):
-            data = f()
-            start_response(response.status, response.headers.items())
-            if isinstance(data, list):
-                return data
-            return [data]
-        for item in middleware_apps:
-            app = item(app)
-
-        def caller(app):
-            wsgi = request.wsgi
-            return app(wsgi.environ, wsgi.start_response)
-        return lambda caller=caller, app=app: caller(app)
-    return middleware
-
-
-def environ_aux(environ, request):
-    new_environ = copy.copy(environ)
-    new_environ['wsgi.input'] = request.body
-    new_environ['wsgi.version'] = 1
-    return new_environ
-
+ISLE25 = sys.version_info[1] <= 5
 
 def parse_get_post_vars(request, environ):
 
@@ -311,17 +330,37 @@ def parse_get_post_vars(request, environ):
             request.get_vars[key] = value
         request.vars[key] = request.get_vars[key]
 
-    # parse POST variables on POST, PUT, BOTH only in post_vars
+
     try:
         request.body = body = copystream_progress(request)
     except IOError:
         raise HTTP(400, "Bad Request - HTTP body is incomplete")
-    if (body and env.request_method in ('POST', 'PUT', 'BOTH')):
+
+    #if content-type is application/json, we must read the body
+    is_json = env.get('http_content_type', '')[:16] == 'application/json'
+
+
+    if is_json:
+        try:
+            json_vars = sj.load(body)
+            body.seek(0)
+        except:
+            # incoherent request bodies can still be parsed "ad-hoc"
+            json_vars = {}
+            pass
+        # update vars and get_vars with what was posted as json
+        if isinstance(json_vars,dict):
+            request.get_vars.update(json_vars)
+            request.vars.update(json_vars)
+
+
+    # parse POST variables on POST, PUT, BOTH only in post_vars
+    if (body and env.request_method in ('POST', 'PUT', 'DELETE', 'BOTH')):
         dpost = cgi.FieldStorage(fp=body, environ=environ, keep_blank_values=1)
         # The same detection used by FieldStorage to detect multipart POSTs
         is_multipart = dpost.type[:10] == 'multipart/'
         body.seek(0)
-        isle25 = sys.version_info[1] <= 5
+
 
         def listify(a):
             return (not isinstance(a, list) and [a]) or a
@@ -348,7 +387,7 @@ def parse_get_post_vars(request, environ):
             pvalue = listify(value)
             if key in request.vars:
                 gvalue = listify(request.vars[key])
-                if isle25:
+                if ISLE25:
                     value = pvalue + gvalue
                 elif is_multipart:
                     pvalue = pvalue[len(gvalue):]
@@ -358,6 +397,9 @@ def parse_get_post_vars(request, environ):
             if len(pvalue):
                 request.post_vars[key] = (len(pvalue) >
                                           1 and pvalue) or pvalue[0]
+        if is_json and isinstance(json_vars,dict):
+            # update post_vars with what was posted as json
+            request.post_vars.update(json_vars)
 
 
 def wsgibase(environ, responder):
@@ -440,13 +482,13 @@ def wsgibase(environ, responder):
                             local_hosts.add(socket.gethostname())
                             local_hosts.add(fqdn)
                             local_hosts.update([
-                                ip[4][0] for ip in socket.getaddrinfo(
-                                    fqdn, 0)])
+                                addrinfo[4][0] for addrinfo 
+                                in getipaddrinfo(fqdn)])
                             if env.server_name:
                                 local_hosts.add(env.server_name)
                                 local_hosts.update([
-                                    ip[4][0] for ip in socket.getaddrinfo(
-                                        env.server_name, 0)])
+                                        addrinfo[4][0] for addrinfo
+                                        in getipaddrinfo(env.server_name)])
                         except (socket.gaierror, TypeError):
                             pass
                     global_settings.local_hosts = list(local_hosts)
@@ -505,13 +547,7 @@ def wsgibase(environ, responder):
                 # expose wsgi hooks for convenience
                 # ##################################################
 
-                request.wsgi.environ = environ_aux(environ, request)
-                request.wsgi.start_response = \
-                    lambda status='200', headers=[], \
-                    exec_info=None, response=response: \
-                    start_response_aux(status, headers, exec_info, response)
-                request.wsgi.middleware = \
-                    lambda *a: middleware_aux(request, response, *a)
+                request.wsgi = LazyWSGI(environ, request, response)
 
                 # ##################################################
                 # load cookies

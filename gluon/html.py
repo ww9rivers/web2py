@@ -586,7 +586,7 @@ class XML(XmlComponent):
         return self.text
 
     def __str__(self):
-        return self.xml()
+        return self.text
 
     def __add__(self, other):
         return '%s%s' % (self, other)
@@ -600,8 +600,9 @@ class XML(XmlComponent):
     def __hash__(self):
         return hash(str(self))
 
-    def __getattr__(self, name):
-        return getattr(str(self), name)
+#    why was this here? Break unpickling in sessions
+#    def __getattr__(self, name):
+#        return getattr(str(self), name)
 
     def __getitem__(self, i):
         return str(self)[i]
@@ -840,9 +841,8 @@ class DIV(XmlComponent):
                 c.latest = self.latest
                 c.session = self.session
                 c.formname = self.formname
-                if hideerror and not \
-                        self.attributes.get('hideerror', False):
-                    c['hideerror'] = hideerror
+                c['hideerror'] = hideerror or \
+                        self.attributes.get('hideerror', False)
                 newstatus = c._traverse(status, hideerror) and newstatus
 
         # for input, textarea, select, option
@@ -1198,6 +1198,13 @@ def TAG_pickler(data):
     return (TAG_unpickler, (marshal_dump,))
 
 
+class __tag_div__(DIV):
+    def __init__(self,name,*a,**b):
+        DIV.__init__(self,*a,**b)
+        self.tag = name
+
+copy_reg.pickle(__tag_div__, TAG_pickler, TAG_unpickler)
+
 class __TAG__(XmlComponent):
 
     """
@@ -1216,11 +1223,7 @@ class __TAG__(XmlComponent):
             name = name[:-1] + '/'
         if isinstance(name, unicode):
             name = name.encode('utf-8')
-
-        class __tag__(DIV):
-            tag = name
-        copy_reg.pickle(__tag__, TAG_pickler, TAG_unpickler)
-        return lambda *a, **b: __tag__(*a, **b)
+        return lambda *a,**b: __tag_div__(name,*a,**b)
 
     def __call__(self, html):
         return web2pyHTMLParser(decoder.decoder(html)).tree
@@ -1476,29 +1479,33 @@ class A(DIV):
     def xml(self):
         if not self.components and self['_href']:
             self.append(self['_href'])
+        if not self['_disable_with']:
+            self['_data-w2p_disable_with'] = 'default'
+        if self['callback'] and not self['_id']:
+            self['_id'] = web2py_uuid()        
         if self['delete']:
-            d = "jQuery(this).closest('%s').remove();" % self['delete']
-        else:
-            d = ''
+            self['_data-w2p_remove'] = self['delete']
+        if self['target']:
+            if self['target'] == '<self>':
+                self['target'] = self['_id']
+            self['_data-w2p_target'] = self['target']
         if self['component']:
-            self['_onclick'] = "web2py_component('%s','%s');%sreturn false;" % \
-                (self['component'], self['target'] or '', d)
-            self['_href'] = self['_href'] or '#null'
+            self['_data-w2p_method'] = 'GET'
+            self['_href'] = self['component']
         elif self['callback']:
-            returnfalse = "var e = arguments[0] || window.event; e.cancelBubble=true; if (e.stopPropagation) {e.stopPropagation(); e.stopImmediatePropagation(); e.preventDefault();}"
-            if d and not self['noconfirm']:
-                self['_onclick'] = "if(confirm(w2p_ajax_confirm_message||'Are you sure you want to delete this object?')){ajax('%s',[],'%s');%s};%s" % \
-                    (self['callback'], self['target'] or '', d, returnfalse)
-            else:
-                self['_onclick'] = "ajax('%s',[],'%s');%sreturn false" % \
-                    (self['callback'], self['target'] or '', d)
-            self['_href'] = self['_href'] or '#null'
+            self['_data-w2p_method'] = 'POST'
+            self['_href'] = self['callback']
+            if self['delete'] and not self['noconfirm']:
+                if not self['confirm']:
+                    self['_data-w2p_confirm'] = 'default'
+                else:
+                    self['_data-w2p_confirm'] = self['confirm']
         elif self['cid']:
-            pre = self['pre_call'] + ';' if self['pre_call'] else ''
-            self['_onclick'] = '%sweb2py_component("%s","%s");%sreturn false;' % \
-                (pre,self['_href'], self['cid'], d)
+            self['_data-w2p_method'] = 'GET'
+            self['_data-w2p_target'] = self['cid']
+            if self['pre_call']:
+                self['_data-w2p_pre_call'] = self['pre_call']
         return DIV.xml(self)
-
 
 class BUTTON(DIV):
 
@@ -1633,12 +1640,27 @@ class TR(DIV):
         self._wrap_components((TD, TH), TD)
 
 
+class __TRHEAD__(DIV):
+    """
+    __TRHEAD__ Component, internal only
+
+    If subcomponents are not TD/TH-components they will be wrapped in a TH
+
+    see also :class:`DIV`
+    """
+
+    tag = 'tr'
+
+    def _fixup(self):
+        self._wrap_components((TD, TH), TH)
+
+
 class THEAD(DIV):
 
     tag = 'thead'
 
     def _fixup(self):
-        self._wrap_components(TR, TR)
+        self._wrap_components((__TRHEAD__, TR), __TRHEAD__)
 
 
 class TBODY(DIV):
@@ -1992,10 +2014,10 @@ class FORM(DIV):
         status = True
         changed = False
         request_vars = self.request_vars
-        if session:
+        if session is not None:
             formkey = session.get('_formkey[%s]' % formname, None)
             # check if user tampering with form and void CSRF
-            if formkey != request_vars._formkey:
+            if not formkey or formkey != request_vars._formkey:
                 status = False
         if formname != request_vars._formname:
             status = False
@@ -2280,7 +2302,7 @@ class BEAUTIFY(DIV):
     example::
 
         >>> BEAUTIFY(['a', 'b', {'hello': 'world'}]).xml()
-        '<div><table><tr><td><div>a</div></td></tr><tr><td><div>b</div></td></tr><tr><td><div><table><tr><td style="font-weight:bold;vertical-align:top">hello</td><td valign="top">:</td><td><div>world</div></td></tr></table></div></td></tr></table></div>'
+        '<div><table><tr><td><div>a</div></td></tr><tr><td><div>b</div></td></tr><tr><td><div><table><tr><td style="font-weight:bold;vertical-align:top;">hello</td><td style="vertical-align:top;">:</td><td><div>world</div></td></tr></table></div></td></tr></table></div>'
 
     turns any list, dictionary, etc into decent looking html.
     Two special attributes are
@@ -2332,8 +2354,8 @@ class BEAUTIFY(DIV):
                             continue
                         rows.append(
                             TR(
-                                TD(filtered_key, _style='font-weight:bold;vertical-align:top'),
-                                TD(':', _valign='top'),
+                                TD(filtered_key, _style='font-weight:bold;vertical-align:top;'),
+                                TD(':', _style='vertical-align:top;'),
                                 TD(BEAUTIFY(value, **attributes))))
                     components.append(TABLE(*rows, **attributes))
                     continue
@@ -2478,7 +2500,7 @@ def test():
 
     >>> from validators import *
     >>> print DIV(A('click me', _href=URL(a='a', c='b', f='c')), BR(), HR(), DIV(SPAN(\"World\"), _class='unknown')).xml()
-    <div><a href=\"/a/b/c\">click me</a><br /><hr /><div class=\"unknown\"><span>World</span></div></div>
+    <div><a data-w2p_disable_with="default" href="/a/b/c">click me</a><br /><hr /><div class=\"unknown\"><span>World</span></div></div>
     >>> print DIV(UL(\"doc\",\"cat\",\"mouse\")).xml()
     <div><ul><li>doc</li><li>cat</li><li>mouse</li></ul></div>
     >>> print DIV(UL(\"doc\", LI(\"cat\", _class='feline'), 18)).xml()

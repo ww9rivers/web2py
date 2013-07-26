@@ -27,7 +27,7 @@ from gluon.languages import (read_possible_languages, read_dict, write_dict,
                              read_plural_dict, write_plural_dict)
 
 
-if DEMO_MODE and request.function in ['change_password', 'pack', 'pack_plugin', 'upgrade_web2py', 'uninstall', 'cleanup', 'compile_app', 'remove_compiled_app', 'delete', 'delete_plugin', 'create_file', 'upload_file', 'update_languages', 'reload_routes', 'git_push', 'git_pull']:
+if DEMO_MODE and request.function in ['change_password', 'pack', 'pack_custom','pack_plugin', 'upgrade_web2py', 'uninstall', 'cleanup', 'compile_app', 'remove_compiled_app', 'delete', 'delete_plugin', 'create_file', 'upload_file', 'update_languages', 'reload_routes', 'git_push', 'git_pull']:
     session.flash = T('disabled in demo mode')
     redirect(URL('site'))
 
@@ -138,17 +138,17 @@ def check_version():
     session.forget()
     session._unlock(response)
 
-    new_version, version_number = check_new_version(request.env.web2py_version,
-                                                    WEB2PY_VERSION_URL)
+    new_version, version = check_new_version(request.env.web2py_version,
+                                             WEB2PY_VERSION_URL)
 
     if new_version == -1:
         return A(T('Unable to check for upgrades'), _href=WEB2PY_URL)
     elif new_version != True:
         return A(T('web2py is up to date'), _href=WEB2PY_URL)
     elif platform.system().lower() in ('windows', 'win32', 'win64') and os.path.exists("web2py.exe"):
-        return SPAN('You should upgrade to version %s.%s.%s' % version_number[:3])
+        return SPAN('You should upgrade to %s' % version.split('(')[0])
     else:
-        return sp_button(URL('upgrade_web2py'), T('upgrade now to %s') % version_number.split('-')[0])
+        return sp_button(URL('upgrade_web2py'), T('upgrade now to %s') % version.split('(')[0])
 
 
 def logout():
@@ -341,7 +341,6 @@ def pack():
         session.flash = T('internal error: %s' % e)
         redirect(URL('site'))
 
-
 def pack_plugin():
     app = get_app()
     if len(request.args) == 2:
@@ -355,6 +354,33 @@ def pack_plugin():
     else:
         session.flash = T('internal error')
         redirect(URL('plugin', args=request.args))
+
+def pack_custom():
+    app = get_app()
+    base = apath(app, r=request)
+    if request.post_vars.file:
+        files = request.post_vars.file
+        files = [files] if not isinstance(files,list) else files
+        fname = 'web2py.app.%s.w2p' % app
+        try:
+            filename = app_pack(app, request, raise_ex=True, filenames=files)
+        except Exception, e:
+            filename = None
+        if filename:
+            response.headers['Content-Type'] = 'application/w2p'
+            disposition = 'attachment; filename=%s' % fname
+            response.headers['Content-Disposition'] = disposition
+            return safe_read(filename, 'rb')
+        else:
+            session.flash = T('internal error: %s' % e)
+            redirect(URL(args=request.args))
+    def ignore(fs):
+        return [f for f in fs if not (
+                f[:1] in '#' or f.endswith('~') or f.endswith('.bak'))]
+    files = {}
+    for (r,d,f) in os.walk(base):
+        files[r] = {'folders':ignore(d),'files':ignore(f)}
+    return locals()
 
 
 def upgrade_web2py():
@@ -430,32 +456,6 @@ def remove_compiled_app():
     remove_compiled_application(apath(app, r=request))
     session.flash = T('compiled application removed')
     redirect(URL('site'))
-
-
-def delete():
-    """ Object delete handler """
-    app = get_app()
-    filename = '/'.join(request.args)
-    sender = request.vars.sender
-
-    if isinstance(sender, list):  # ## fix a problem with Vista
-        sender = sender[0]
-
-    if 'nodelete' in request.vars:
-        redirect(URL(sender, anchor=request.vars.id))
-    elif 'delete' in request.vars:
-        try:
-            full_path = apath(filename, r=request)
-            lineno = count_lines(open(full_path, 'r').read())
-            os.unlink(full_path)
-            log_progress(app, 'DELETE', filename, progress=-lineno)
-            session.flash = T('file "%(filename)s" deleted',
-                              dict(filename=filename))
-        except Exception:
-            session.flash = T('unable to delete file "%(filename)s"',
-                              dict(filename=filename))
-        redirect(URL(sender, anchor=request.vars.id2))
-    return dict(filename=filename, sender=sender)
 
 
 def delete():
@@ -557,6 +557,24 @@ def search():
 
 
 def edit():
+    """ File edit handler """
+    # Load json only if it is ajax edited...
+    app = get_app(request.vars.app)
+
+    if not(request.ajax):
+        # return the scaffolding, the rest will be through ajax requests
+        response.title = T('Editing %s' % app)
+        editarea_preferences = {}
+        editarea_preferences['FONT_SIZE'] = '10'
+        editarea_preferences['FULL_SCREEN'] = 'false'
+        editarea_preferences['ALLOW_TOGGLE'] = 'true'
+        editarea_preferences['REPLACE_TAB_BY_SPACES'] = '4'
+        editarea_preferences['DISPLAY'] = 'onload'
+        for key in editarea_preferences:
+            if key in globals():
+                editarea_preferences[key] = globals()[key]
+        return response.render ('default/edit.html', dict(app=request.args[0], editarea_preferences=editarea_preferences))
+
     """ File edit handler """
     # Load json only if it is ajax edited...
     app = get_app(request.vars.app)
@@ -682,7 +700,7 @@ def edit():
         cfilename = os.path.join(request.args[0], 'controllers',
                                  request.args[2] + '.py')
         if os.path.exists(apath(cfilename, r=request)):
-            edit_controller = URL('edit', args=[cfilename])
+            edit_controller = URL('edit', args=[cfilename.replace(os.sep, "/")])
             view = request.args[3].replace('.html', '')
             view_link = URL(request.args[0], request.args[2], view)
     elif filetype == 'python' and request.args[1] == 'controllers':
@@ -704,6 +722,7 @@ def edit():
                 vf = os.path.split(v)[-1]
                 vargs = "/".join([viewpath.replace(os.sep, "/"), vf])
                 editviewlinks.append(A(vf.split(".")[0],
+                                       _class="editor_filelink",
                                        _href=URL('edit', args=[vargs])))
 
     if len(request.args) > 2 and request.args[1] == 'controllers':
@@ -715,17 +734,7 @@ def edit():
     if 'from_ajax' in request.vars:
         return response.json({'file_hash': file_hash, 'saved_on': saved_on, 'functions': functions, 'controller': controller, 'application': request.args[0], 'highlight': highlight})
     else:
-
-        editarea_preferences = {}
-        editarea_preferences['FONT_SIZE'] = '10'
-        editarea_preferences['FULL_SCREEN'] = 'false'
-        editarea_preferences['ALLOW_TOGGLE'] = 'true'
-        editarea_preferences['REPLACE_TAB_BY_SPACES'] = '4'
-        editarea_preferences['DISPLAY'] = 'onload'
-        for key in editarea_preferences:
-            if key in globals():
-                editarea_preferences[key] = globals()[key]
-        return dict(app=request.args[0],
+        file_details = dict(app=request.args[0],
                     filename=filename,
                     filetype=filetype,
                     data=data,
@@ -735,8 +744,12 @@ def edit():
                     controller=controller,
                     functions=functions,
                     view_link=view_link,
-                    editarea_preferences=editarea_preferences,
-                    editviewlinks=editviewlinks)
+                    editviewlinks=editviewlinks,
+                    id=IS_SLUG()(filename)[0],
+                    force= True if (request.vars.restore or request.vars.revert) else False)
+        plain_html = response.render('default/edit_js.html', file_details)
+        file_details['plain_html'] = plain_html
+        return response.json(file_details)
 
 
 def resolve():
@@ -1651,26 +1664,6 @@ def update_languages():
     redirect(URL('design', args=app, anchor='languages'))
 
 
-def twitter():
-    session.forget()
-    session._unlock(response)
-    import gluon.tools
-    import gluon.contrib.simplejson as sj
-    try:
-        if TWITTER_HASH:
-            page = urllib.urlopen("http://search.twitter.com/search.json?q=%%40%s" % TWITTER_HASH).read()
-            data = sj.loads(page, encoding="utf-8")['results']
-            d = dict()
-            for e in data:
-                d[e["id"]] = e
-                r = reversed(sorted(d))
-            return dict(tweets=[d[k] for k in r])
-        else:
-            return 'disabled'
-    except Exception, e:
-        return DIV(T('Unable to download because:'), BR(), str(e))
-
-
 def user():
     if MULTI_USER_MODE:
         if not db(db.auth_user).count():
@@ -1777,4 +1770,3 @@ def git_push():
             session.flash = T("Push failed, there are unmerged entries in the cache. Resolve merge issues manually and try again.")
             redirect(URL('site'))
     return dict(app=app, form=form)
-

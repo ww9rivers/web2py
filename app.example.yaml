@@ -21,7 +21,17 @@ default_expiration: "24h"   # for static files
 
 handlers:
 
-- url: /(?P<a>.+?)/static/(?P<b>.+)
+# Warning! Static mapping - below - isn't compatible with 
+# the parametric router's language logic. 
+# You cannot use them together.
+
+- url: /(.+?)/[^_]*\/?static/_\d.\d.\d\/?(.+)
+  static_files: applications/\1/static/\2
+  upload: applications/(.+?)/static/(.+)
+  secure: optional
+  expiration: "365d"
+
+- url: /(.+?)/[^_]*\/?static/?(.+)
   static_files: applications/\1/static/\2
   upload: applications/(.+?)/static/(.+)
   secure: optional

@@ -9,7 +9,7 @@ License: LGPLv3 (http://www.gnu.org/licenses/lgpl.html)
 CONTENT_TYPE dictionary created against freedesktop.org' shared mime info
 database version 1.1.
 
-Deviations from official standards: 
+Deviations from official standards:
 - '.md': 'application/x-genesis-rom' --> 'text/x-markdown'
 - '.png': 'image/x-apple-ios-png' --> 'image/png'
 Additions:
@@ -443,10 +443,10 @@ CONTENT_TYPE = {
     '.odp': 'application/vnd.oasis.opendocument.presentation',
     '.ods': 'application/vnd.oasis.opendocument.spreadsheet',
     '.odt': 'application/vnd.oasis.opendocument.text',
-    '.oga': 'audio/x-speex+ogg',
-    '.ogg': 'video/x-theora+ogg',
+    '.oga': 'audio/ogg',
+    '.ogg': 'application/ogg',
     '.ogm': 'video/x-ogm+ogg',
-    '.ogv': 'video/x-theora+ogg',
+    '.ogv': 'video/ogg',
     '.ogx': 'application/ogg',
     '.old': 'application/x-trash',
     '.oleo': 'application/x-oleo',
@@ -518,7 +518,7 @@ CONTENT_TYPE = {
     '.pln': 'application/x-planperfect',
     '.pls': 'audio/x-scpls',
     '.pm': 'application/x-perl',
-    '.png': 'image/x-apple-ios-png',
+    '.png': 'image/png',
     '.pnm': 'image/x-portable-anymap',
     '.pntg': 'image/x-macpaint',
     '.po': 'text/x-gettext-translation',

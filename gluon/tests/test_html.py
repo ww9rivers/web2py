@@ -46,7 +46,7 @@ class TestBareHelpers(unittest.TestCase):
 
     def testA(self):
         self.assertEqual(A('<>', _a='1', _b='2').xml(),
-                         '<a a="1" b="2">&lt;&gt;</a>')
+                         '<a a="1" b="2" data-w2p_disable_with="default">&lt;&gt;</a>')
 
     def testB(self):
         self.assertEqual(B('<>', _a='1', _b='2').xml(),
@@ -188,6 +188,10 @@ class TestBareHelpers(unittest.TestCase):
 
     def testTHEAD(self):
         self.assertEqual(THEAD('<>', _a='1', _b='2').xml(),
+                         '<thead a="1" b="2"><tr><th>&lt;&gt;</th></tr></thead>')
+        #self.assertEqual(THEAD(TRHEAD('<>'), _a='1', _b='2').xml(),
+        #                 '<thead a="1" b="2"><tr><th>&lt;&gt;</th></tr></thead>')
+        self.assertEqual(THEAD(TR('<>'), _a='1', _b='2').xml(),
                          '<thead a="1" b="2"><tr><td>&lt;&gt;</td></tr></thead>')
 
     def testTITLE(self):
@@ -205,6 +209,11 @@ class TestBareHelpers(unittest.TestCase):
     def testUL(self):
         self.assertEqual(UL('<>', _a='1', _b='2').xml(),
                          '<ul a="1" b="2"><li>&lt;&gt;</li></ul>')
+
+class TestData(unittest.TestCase):
+
+    def testAdata(self):
+        self.assertEqual(A('<>', data=dict(abc='<def?asd>', cde='standard'), _a='1', _b='2').xml(),'<a a="1" b="2" data-abc="&lt;def?asd&gt;" data-cde="standard" data-w2p_disable_with="default">&lt;&gt;</a>')
 
 
 if __name__ == '__main__':
