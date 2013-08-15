@@ -194,7 +194,7 @@ CALLABLETYPES = (types.LambdaType, types.FunctionType,
 
 TABLE_ARGS = set(
     ('migrate','primarykey','fake_migrate','format','redefine',
-     'singular','plural','trigger_name','sequence_name',
+     'singular','plural','trigger_name','sequence_name','fields',
      'common_filter','polymodel','table_class','on_define','actual_name'))
 
 SELECT_ARGS = set(
@@ -253,7 +253,7 @@ REGEX_TYPE = re.compile('^([\w\_\:]+)')
 REGEX_DBNAME = re.compile('^(\w+)(\:\w+)*')
 REGEX_W = re.compile('^\w+$')
 REGEX_TABLE_DOT_FIELD = re.compile('^(\w+)\.(\w+)$')
-REGEX_UPLOAD_PATTERN = re.compile('(?P<table>[\w\-]+)\.(?P<field>[\w\-]+)\.(?P<uuidkey>[\w\-]+)\.(?P<name>\w+)\.\w+$')
+REGEX_UPLOAD_PATTERN = re.compile('(?P<table>[\w\-]+)\.(?P<field>[\w\-]+)\.(?P<uuidkey>[\w\-]+)(\.(?P<name>\w+))?\.\w+$')
 REGEX_CLEANUP_FN = re.compile('[\'"\s;]+')
 REGEX_UNPACK = re.compile('(?<!\|)\|(?!\|)')
 REGEX_PYTHON_KEYWORDS = re.compile('^(and|del|from|not|while|as|elif|global|or|with|assert|else|if|pass|yield|break|except|import|print|class|exec|in|raise|continue|finally|is|return|def|for|lambda|try)$')
@@ -567,7 +567,7 @@ class ConnectionPool(object):
         """ this actually does not make the folder. it has to be there """
         self.folder = getattr(THREAD_LOCAL,'folder','')
 
-        if (os.path.isabs(self.folder) and 
+        if (os.path.isabs(self.folder) and
             isinstance(self, UseDatabaseStoredFile) and
             self.folder.startswith(os.getcwd())):
             self.folder = os.path.relpath(self.folder, os.getcwd())
@@ -1076,16 +1076,18 @@ class BaseAdapter(ConnectionPool):
             elif not key in sql_fields:
                 del sql_fields_current[key]
                 ftype = sql_fields_old[key]['type']
-                if self.dbengine in ('postgres',) and ftype.startswith('geometry'):
+                if (self.dbengine in ('postgres',) and 
+                    ftype.startswith('geometry')):
                     geotype, parms = ftype[:-1].split('(')
                     schema = parms.split(',')[0]
-                    query = [ "SELECT DropGeometryColumn ('%(schema)s', '%(table)s', '%(field)s');" %
+                    query = [ "SELECT DropGeometryColumn ('%(schema)s', "+
+                              "'%(table)s', '%(field)s');" %
                               dict(schema=schema, table=tablename, field=key,) ]
                 elif self.dbengine in ('firebird',):
                     query = ['ALTER TABLE %s DROP %s;' % (tablename, key)]
                 else:
-                    query = ['ALTER TABLE %s DROP COLUMN %s;'
-                             % (tablename, key)]
+                    query = ['ALTER TABLE %s DROP COLUMN %s;' % 
+                             (tablename, key)]
                 metadata_change = True
             elif sql_fields[key]['sql'] != sql_fields_old[key]['sql'] \
                   and not (key in table.fields and
@@ -1124,8 +1126,10 @@ class BaseAdapter(ConnectionPool):
                         self.log('faked!\n', table)
                     else:
                         self.execute(sub_query)
-                        # Caveat: mysql, oracle and firebird do not allow multiple alter table
-                        # in one transaction so we must commit partial transactions and
+                        # Caveat: mysql, oracle and firebird 
+                        # do not allow multiple alter table
+                        # in one transaction so we must commit 
+                        # partial transactions and
                         # update table._dbt after alter table.
                         if db._adapter.commit_on_alter_table:
                             db.commit()
@@ -1261,7 +1265,7 @@ class BaseAdapter(ConnectionPool):
     def BELONGS(self, first, second):
         if isinstance(second, str):
             return '(%s IN (%s))' % (self.expand(first), second[:-1])
-        elif not second:
+        if not second:
             return '(1=0)'
         items = ','.join(self.expand(item, first.type) for item in second)
         return '(%s IN (%s))' % (self.expand(first), items)
@@ -1676,10 +1680,9 @@ class BaseAdapter(ConnectionPool):
                 sql_o += ' ORDER BY %s' % self.RANDOM()
             else:
                 sql_o += ' ORDER BY %s' % self.expand(orderby)
-        if limitby:
-            if orderby_on_limitby and not orderby and tablenames:
-                sql_o += ' ORDER BY %s' % ', '.join(['%s.%s'%(t,x) for t in tablenames for x in (hasattr(self.db[t],'_primarykey') and self.db[t]._primarykey or [self.db[t]._id.name])])
-            # oracle does not support limitby
+        if (limitby and not groupby and tablenames and orderby_on_limitby and not orderby):
+            sql_o += ' ORDER BY %s' % ', '.join(['%s.%s'%(t,x) for t in tablenames for x in (hasattr(self.db[t],'_primarykey') and self.db[t]._primarykey or [self.db[t]._id.name])])
+        # oracle does not support limitby
         sql = self.select_limitby(sql_s, sql_f, sql_t, sql_w, sql_o, limitby)
         if for_update and self.can_select_for_update is True:
             sql = sql.rstrip(';') + ' FOR UPDATE;'
@@ -2058,7 +2061,6 @@ class BaseAdapter(ConnectionPool):
 
     def parse(self, rows, fields, colnames, blob_decode=True,
               cacheable = False):
-        self.build_parsemap()
         db = self.db
         virtualtables = []
         new_rows = []
@@ -3174,10 +3176,6 @@ class MSSQLAdapter(BaseAdapter):
         if limitby:
             (lmin, lmax) = limitby
             sql_s += ' TOP %i' % lmax
-        if 'GROUP BY' in sql_o:
-            orderfound = sql_o.find('ORDER BY ')
-            if orderfound >= 0:
-                sql_o = sql_o[:orderfound]
         return 'SELECT %s %s FROM %s%s%s;' % (sql_s, sql_f, sql_t, sql_w, sql_o)
 
     TRUE = 1
@@ -4370,6 +4368,7 @@ class GoogleSQLAdapter(UseDatabaseStoredFile,MySQLAdapter):
         self.pool_size = pool_size
         self.db_codec = db_codec
         self._after_connection = after_connection
+        if do_connect: self.find_driver(adapter_args, uri)
         self.folder = folder or pjoin('$HOME',THREAD_LOCAL.folder.split(
                 os.sep+'applications'+os.sep,1)[1])
         ruri = uri.split("://")[1]
@@ -4399,6 +4398,10 @@ class GoogleSQLAdapter(UseDatabaseStoredFile,MySQLAdapter):
 
     def execute(self, command, *a, **b):
         return self.log_execute(command.decode('utf8'), *a, **b)
+
+    def find_driver(self,adapter_args,uri=None):
+        self.adapter_args = adapter_args
+        self.driver = "google"        
 
 class NoSQLAdapter(BaseAdapter):
     can_select_for_update = False
@@ -5352,7 +5355,12 @@ class MongoDBAdapter(NoSQLAdapter):
             d = datetime.date(2000, 1, 1)
             # mongodb doesn't has a  time object and so it must datetime,
             # string or integer
-            return datetime.datetime.combine(d, value)
+            return datetime.datetime.combine(d, value)        
+        elif fieldtype == "blob":
+            from bson import Binary
+            if not isinstance(value, Binary):
+                return Binary(value)
+            return value
         elif (isinstance(fieldtype, basestring) and
               fieldtype.startswith('list:')):
             if fieldtype.startswith('list:reference'):
@@ -7410,6 +7418,7 @@ class DAL(object):
                         types = ADAPTERS[self._dbname].types
                         # copy so multiple DAL() possible
                         self._adapter.types = copy.copy(types)
+                        self._adapter.build_parsemap()
                         if bigint_id:
                             if 'big-id' in types and 'reference' in types:
                                 self._adapter.types['id'] = types['big-id']
@@ -7762,6 +7771,8 @@ def index():
         *fields,
         **args
         ):
+        if not fields and 'fields' in args:
+            fields = args.get('fields',())
         if not isinstance(tablename,str):
             raise SyntaxError("missing table name")
         elif hasattr(self,tablename) or tablename in self.tables:
@@ -8078,7 +8089,7 @@ def index():
                     # skip all non-empty lines
                     for line in ifile:
                         if not line.strip():
-                            breal
+                            break
                 else:
                     raise RuntimeError("Unable to import table that does not exist.\nTry db.import_from_csv_file(..., map_tablenames={'table':'othertable'},ignore_missing_tables=True)")
 
@@ -8242,24 +8253,27 @@ class Table(object):
             fieldnames.add('id')
             self._id = field
         virtual_fields = []
+        def include_new(field):
+            newfields.append(field)
+            fieldnames.add(field.name)
+            if field.type=='id':
+                self._id = field
         for field in fields:
             if isinstance(field, (FieldMethod, FieldVirtual)):
-                virtual_fields.append(field)
+                virtual_fields.append(field)            
             elif isinstance(field, Field) and not field.name in fieldnames:
                 if field.db is not None:
-                    field = copy.copy(field)
-                newfields.append(field)
-                fieldnames.add(field.name)
-                if field.type=='id':
-                    self._id = field
+                    field = copy.copy(field)                
+                include_new(field)
+            elif isinstance(field, dict) and 'fieldname' and \
+                    not field['fieldname'] in fieldnames:
+                include_new(Field(**field))
             elif isinstance(field, Table):
                 table = field
                 for field in table:
                     if not field.name in fieldnames and not field.type=='id':
                         t2 = not table._actual and self._tablename
-                        field = field.clone(point_self_references_to=t2)
-                        newfields.append(field)
-                        fieldnames.add(field.name)
+                        include_new(field.clone(point_self_references_to=t2))
             elif not isinstance(field, (Field, Table)):
                 raise SyntaxError(
                     'define_table argument is not a Field or Table: %s' % field)
@@ -8348,10 +8362,10 @@ class Table(object):
         if is_active and is_active in fieldnames:
             self._before_delete.append(
                 lambda qset: qset.update(is_active=False))
-            newquery = lambda query, t=self: \
+            newquery = lambda query, t=self, name=self._tablename: \
                 reduce(AND,[db[tn].is_active == True
                             for tn in db._adapter.tables(query)
-                            if tn==t.name or getattr(db[tn],'_ot',None)==t.name])
+                            if tn==name or getattr(db[tn],'_ot',None)==name])
             query = self._common_filter
             if query:
                 newquery = query & newquery
@@ -8369,21 +8383,23 @@ class Table(object):
         db = self._db
         pr = db._pending_references
         self._referenced_by = []
+        self._references = []
         for field in self:
             fieldname = field.name
             field_type = field.type
             if isinstance(field_type,str) and field_type[:10] == 'reference ':
                 ref = field_type[10:].strip()
-                if not ref.split():
+                if not ref.strip():
                     raise SyntaxError('Table: reference to nothing: %s' %ref)
-                refs = ref.split('.')
-                rtablename = refs[0]
+                if '.' in ref:
+                    rtablename, rfieldname = ref.split('.',1)
+                else:
+                    rtablename, rfieldname = ref, None
                 if not rtablename in db:
                     pr[rtablename] = pr.get(rtablename,[]) + [field]
                     continue
                 rtable = db[rtablename]
-                if len(refs)==2:
-                    rfieldname = refs[1]
+                if rfieldname:
                     if not hasattr(rtable,'_primarykey'):
                         raise SyntaxError(
                             'keyed tables can only reference other keyed tables (for now)')
@@ -8391,7 +8407,14 @@ class Table(object):
                         raise SyntaxError(
                             "invalid field '%s' for referenced table '%s' in table '%s'" \
                             % (rfieldname, rtablename, self._tablename))
+                    rfield = rtable[rfieldname]
+                else:
+                    rfield = rtable._id
                 rtable._referenced_by.append(field)
+                field.referent = rfield
+                self._references.append(field)
+            else:
+                field.referent = None
         for referee in pr.get(self._tablename,[]):
             self._referenced_by.append(referee)
 
@@ -8584,7 +8607,7 @@ class Table(object):
         for field in self:
             if field.type=='upload' and field.name in fields:
                 value = fields[field.name]
-                if value and not isinstance(value,str):
+                if value is not None and not isinstance(value,str):
                     if hasattr(value,'file') and hasattr(value,'filename'):
                         new_name = field.store(value.file,filename=value.filename)
                     elif hasattr(value,'read') and hasattr(value,'name'):
@@ -9042,7 +9065,7 @@ class Expression(object):
         db = self.db
         return Query(db, db._adapter.REGEXP, self, value)
 
-    def belongs(self, *value):
+    def belongs(self, *value, **kwattr):
         """
         Accepts the following inputs:
            field.belongs(1,2)
@@ -9057,6 +9080,11 @@ class Expression(object):
             value = value[0]
         if isinstance(value,Query):
             value = db(value)._select(value.first._table._id)
+        elif not isinstance(value, basestring):
+            value = set(value)
+            if kwattr.get('null') and None in value:
+                value.remove(None)
+                return (self == None) | Query(db, db._adapter.BELONGS, self, value)
         return Query(db, db._adapter.BELONGS, self, value)
 
     def startswith(self, value):
@@ -9424,9 +9452,6 @@ class Field(Expression):
                 raise http.HTTP(404)
         if self.authorize and not self.authorize(row):
             raise http.HTTP(403)
-        m = REGEX_UPLOAD_PATTERN.match(name)
-        if not m or not self.isattachment:
-            raise TypeError('Can\'t retrieve %s' % name)
         file_properties = self.retrieve_file_properties(name,path)
         filename = file_properties['filename']
         if isinstance(self_uploadfield, str):  # ## if file is in DB
@@ -9450,35 +9475,35 @@ class Field(Expression):
         return (filename, stream)
 
     def retrieve_file_properties(self, name, path=None):
+        m = REGEX_UPLOAD_PATTERN.match(name)
+        if not m or not self.isattachment:
+            raise TypeError('Can\'t retrieve %s file properties' % name)
         self_uploadfield = self.uploadfield
         if self.custom_retrieve_file_properties:
             return self.custom_retrieve_file_properties(name, path)
-        try:
-            m = REGEX_UPLOAD_PATTERN.match(name)
-            if not m or not self.isattachment:
-                raise TypeError('Can\'t retrieve %s file properties' % name)
-            filename = base64.b16decode(m.group('name'), True)
-            filename = REGEX_CLEANUP_FN.sub('_', filename)
-        except (TypeError, AttributeError):
-            filename = name
-        if isinstance(self_uploadfield, str):  # ## if file is in DB
-            return dict(path=None,filename=filename)
-        elif isinstance(self_uploadfield,Field):
-            return dict(path=None,filename=filename)
+        if m.group('name'):
+            try:
+                filename = base64.b16decode(m.group('name'), True)
+                filename = REGEX_CLEANUP_FN.sub('_', filename)
+            except (TypeError, AttributeError):
+                filename = name
         else:
-            # ## if file is on filesystem
-            if path:
-                pass
-            elif self.uploadfolder:
+            filename = name
+        # ## if file is in DB
+        if isinstance(self_uploadfield, (str, Field)):  
+            return dict(path=None,filename=filename)
+        # ## if file is on filesystem
+        if not path:
+            if self.uploadfolder:
                 path = self.uploadfolder
             else:
                 path = pjoin(self.db._adapter.folder, '..', 'uploads')
-            if self.uploadseparate:
-                t = m.group('table')
-                f = m.group('field')
-                u = m.group('uuidkey')
-                path = pjoin(path,"%s.%s" % (t,f),u[:2])
-            return dict(path=path,filename=filename)
+        if self.uploadseparate:
+            t = m.group('table')
+            f = m.group('field')
+            u = m.group('uuidkey')
+            path = pjoin(path,"%s.%s" % (t,f),u[:2])
+        return dict(path=path,filename=filename)
 
 
     def formatter(self, value):
@@ -10305,22 +10330,56 @@ class Rows(object):
         rows.records = sorted(self,key=f,reverse=reverse)
         return rows
 
-
-    def group_by_value(self, field):
+    def group_by_value(self, *fields, **args):
         """
         regroups the rows, by one of the fields
         """
+        one_result = False
+        if 'one_result' in args:
+            one_result = args['one_result']
+            
+        def build_fields_struct(row, fields, num, groups):
+            ''' helper function: 
+            '''
+            if num > len(fields)-1:
+                if one_result:
+                    return row
+                else:
+                    return [row]
+            
+            key = fields[num]
+            value = row[key]
+            
+            if value not in groups:
+                groups[value] = build_fields_struct(row, fields, num+1, {})
+            else:
+                struct = build_fields_struct(row, fields, num+1, groups[ value ])
+                
+                # still have more grouping to do
+                if type(struct) == type(dict()):
+                    groups[value].update()
+                # no more grouping, first only is off
+                elif type(struct) == type(list()):
+                    groups[value] += struct
+                # no more grouping, first only on
+                else:
+                    groups[value] = struct
+            
+            return groups
+        
+        if len(fields) == 0:
+            return self
+        
+        # if select returned no results
         if not self.records:
             return {}
-        key = str(field)
+        
         grouped_row_group = dict()
 
+        # build the struct
         for row in self:
-            value = row[key]
-            if not value in grouped_row_group:
-                grouped_row_group[value] = [row]
-            else:
-                grouped_row_group[value].append(row)
+            build_fields_struct(row, fields, 0, grouped_row_group)
+                
         return grouped_row_group
 
     def render(self, i=None, fields=None):

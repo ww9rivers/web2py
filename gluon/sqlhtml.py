@@ -13,12 +13,7 @@ Holds:
 - form_factory: provides a SQLFORM for an non-db backed table
 
 """
-try:
-    from urlparse import parse_qs as psq
-except ImportError:
-    from cgi import parse_qs as psq
 import os
-import copy
 from http import HTTP
 from html import XmlComponent
 from html import XML, SPAN, TAG, A, DIV, CAT, UL, LI, TEXTAREA, BR, IMG, SCRIPT
@@ -26,7 +21,7 @@ from html import FORM, INPUT, LABEL, OPTION, SELECT
 from html import TABLE, THEAD, TBODY, TR, TD, TH, STYLE
 from html import URL, truncate_string, FIELDSET
 from dal import DAL, Field, Table, Row, CALLABLETYPES, smart_query, \
-    bar_encode, Reference, REGEX_TABLE_DOT_FIELD
+    bar_encode, Reference, REGEX_TABLE_DOT_FIELD, Expression
 from storage import Storage
 from utils import md5_hash
 from validators import IS_EMPTY_OR, IS_NOT_EMPTY, IS_LIST_OF, IS_DATE, \
@@ -1454,7 +1449,7 @@ class SQLFORM(FORM):
                         (cStringIO.StringIO(f), 'file.txt')
                 else:
                     # this should never happen, why does it happen?
-                    print 'f=',repr(f)
+                    #print 'f=',repr(f)
                     continue
                 newfilename = field.store(source_file, original_filename,
                                           field.uploadfolder)
@@ -1822,10 +1817,11 @@ class SQLFORM(FORM):
         session = current.session
         response = current.response
         logged = session.auth and session.auth.user
-        wenabled = (not user_signature or logged)
+        wenabled = (not user_signature or logged) and not groupby
         create = wenabled and create
         editable = wenabled and editable
         deletable = wenabled and deletable
+        details = details and not groupby
         rows = None
 
         def fetch_count(dbset):
@@ -1835,9 +1831,10 @@ class SQLFORM(FORM):
                 if groupby:
                     c = 'count(*)'
                     nrows = db.executesql(
-                        'select count(*) from (%s);' %
+                        'select count(*) from (%s) _tmp;' %
                         dbset._select(c, left=left, cacheable=True,
-                                      groupby=groupby, cache=cache_count)[:-1])[0][0]
+                                      groupby=groupby,
+                                      cache=cache_count)[:-1])[0][0]
                 elif left:
                     c = 'count(*)'
                     nrows = dbset.select(c, left=left, cacheable=True, cache=cache_count).first()[c]
@@ -1930,11 +1927,16 @@ class SQLFORM(FORM):
                         columns.append(f)
                         fields.append(f)
         if not field_id:
-            field_id = tables[0]._id
-        if not any(str(f)==str(field_id) for f in fields):
-            fields = [f for f in fields]+[field_id]
+            if groupby is None:
+                field_id = tables[0]._id
+            elif groupby and isinstance(groupby, Field):
+                field_id = groupby #take the field passed as groupby
+            elif groupby and isinstance(groupby, Expression):
+                field_id = groupby.first #take the first groupby field
         table = field_id.table
         tablename = table._tablename
+        if not any(str(f)==str(field_id) for f in fields):
+            fields = [f for f in fields]+[field_id]
         if upload == '<default>':
             upload = lambda filename: url(args=['download', filename])
             if request.args(-2) == 'download':
@@ -2175,8 +2177,8 @@ class SQLFORM(FORM):
         order = request.vars.order or ''
         if sortable:
             if order and not order == 'None':
-                tablename, fieldname = order.split('~')[-1].split('.', 1)
-                sort_field = db[tablename][fieldname]
+                otablename, ofieldname = order.split('~')[-1].split('.', 1)
+                sort_field = db[otablename][ofieldname]
                 exception = sort_field.type in ('date', 'datetime', 'time')
                 if exception:
                     orderby = (order[:1] == '~' and sort_field) or ~sort_field
@@ -2186,18 +2188,32 @@ class SQLFORM(FORM):
         headcols = []
         if selectable:
             headcols.append(TH(_class=ui.get('default')))
+
+        ordermatch, marker = orderby, ''
+        if orderby:
+            #if orderby is a single column, remember to put the marker
+            if isinstance(orderby, Expression):
+                if orderby.first and not orderby.second:
+                    ordermatch, marker = orderby.first, '~'
+        ordermatch = marker + str(ordermatch)
         for field in columns:
             if not field.readable:
                 continue
             key = str(field)
             header = headers.get(str(field), field.label or key)
             if sortable and not isinstance(field, Field.Virtual):
-                if key == order:
-                    key, marker = '~' + order, sorter_icons[0]
-                elif key == order[1:]:
-                    marker = sorter_icons[1]
+                marker = ''
+                if order:
+                    if key == order:
+                        key, marker = '~' + order, sorter_icons[0]
+                    elif key == order[1:]:
+                        marker = sorter_icons[1]
                 else:
-                    marker = ''
+                    print 'a', key, ordermatch
+                    if key == ordermatch:
+                        key, marker = '~' + order, sorter_icons[0]
+                    elif key == ordermatch[1:]:
+                        marker = sorter_icons[1]
                 header = A(header, marker, _href=url(vars=dict(
                     keywords=request.vars.keywords or '',
                     order=key)), _class=trap_class())
@@ -2618,38 +2634,30 @@ class SQLFORM(FORM):
         for rfield in table._referenced_by:
             check[rfield.tablename] = \
                 check.get(rfield.tablename, []) + [rfield.name]
+        if linked_tables is None:
+            linked_tables = db.tables()
         if isinstance(linked_tables, dict):
-            for tbl in linked_tables.keys():
-                tb = db[tbl]
-                if isinstance(linked_tables[tbl], list) and len(linked_tables[tbl])==1:
-                    linked_tables[tbl] = linked_tables[tbl][0]
-                if isinstance(linked_tables[tbl], list):
-                    for fld in linked_tables[tbl]:
-                        if fld not in db[tbl].fields:
-                            raise ValueError('Field %s not in table' %fld)
-                        args0 = tbl + '.' + fld
-                        t = T('%s(%s)' %(tbl, fld))
-                        links.append(
-                            lambda row, t=t, nargs=nargs, args0=args0:
-                                A(SPAN(t), _class=trap_class(), _href=url(
-                                    args=[args0, row[id_field_name]])))
+            linked_tables = linked_tables.get(table._tablename,[])
+        if linked_tables:
+            for item in linked_tables:
+                tb = None
+                if isinstance(item,Table) and item._tablename in check:
+                    tablename = item._tablename
+                    linked_fieldnames = check[tablename]
+                    td = item
+                elif isinstance(item,str) and item in check:
+                    tablename = item
+                    linked_fieldnames = check[item]
+                    tb = db[item]
+                elif isinstance(item,Field) and item.name in check.get(item._tablename,[]):
+                    tablename = item._tablename
+                    linked_fieldnames = [item.name]
+                    tb = item.table
                 else:
-                    fld = linked_tables[tbl]
-                    if fld not in db[tbl].fields:
-                        raise ValueError('Field %s not in table' %fld)
-                    args0 = tbl + '.' + fld
-                    t = T(tb._plural)
-                    links.append(
-                        lambda row, t=t, nargs=nargs, args0=args0:
-                        A(SPAN(t), _class=trap_class(), _href=url(
-                          args=[args0, row[id_field_name]])))
-        else:
-            for tablename in sorted(check):
-                linked_fieldnames = check[tablename]
-                tb = db[tablename]
-                multiple_links = len(linked_fieldnames) > 1
-                for fieldname in linked_fieldnames:
-                    if linked_tables is None or tablename in linked_tables:
+                    linked_fieldnames = []
+                if tb:
+                    multiple_links = len(linked_fieldnames) > 1
+                    for fieldname in linked_fieldnames:
                         t = T(tb._plural) if not multiple_links else \
                             T(tb._plural + '(' + fieldname + ')')
                         args0 = tablename + '.' + fieldname

@@ -893,6 +893,7 @@ class Auth(object):
         on_failed_authentication=lambda x: redirect(x),
         formstyle="table3cols",
         label_separator=": ",
+        logging_enabled = True,
         allow_delete_accounts=False,
         password_field='password',
         table_user_name='auth_user',
@@ -969,7 +970,6 @@ class Auth(object):
         new_password='New password',
         old_password='Old password',
         group_description='Group uniquely assigned to user %(id)s',
-        logging_enabled = True,
         register_log='User %(id)s Registered',
         login_log='User %(id)s Logged-in',
         login_failed_log=None,
@@ -1154,9 +1154,6 @@ class Auth(object):
                 del session.auth
         # ## what happens after login?
 
-        self.next = current.request.vars._next
-        if isinstance(self.next, (list, tuple)):
-            self.next = self.next[0]
         url_index = URL(controller, 'index')
         url_login = URL(controller, function, args='login')
         # ## what happens after registration?
@@ -1234,6 +1231,12 @@ class Auth(object):
             self.define_signature()
         else:
             self.signature = None
+
+    def get_vars_next(self):
+        next = current.request.vars._next
+        if isinstance(next, (list, tuple)):
+            next = next[0]
+        return next
 
     def _get_user_id(self):
         "accessor for auth.user_id"
@@ -1750,13 +1753,14 @@ class Auth(object):
             user_id = None  # user unknown
         vars = vars or {}
         # log messages should not be translated
-        if type(descrption).__name__ == 'lazyT':
+        if type(description).__name__ == 'lazyT':
             description = description.m
         self.table_event().insert(
             description=str(description % vars),
             origin=origin, user_id=user_id)
 
-    def get_or_create_user(self, keys, update_fields=['email'], login=True):
+    def get_or_create_user(self, keys, update_fields=['email'],
+                           login=True, get=True):
         """
         Used for alternate login methods:
             If the user exists already then password is updated.
@@ -1786,6 +1790,9 @@ class Auth(object):
                 and ('registration_id' not in keys or user.registration_id != str(keys['registration_id'])):
             user = None  # THINK MORE ABOUT THIS? DO WE TRUST OPENID PROVIDER?
         if user:
+            if not get:
+                # added for register_bare to avoid overwriting users
+                return None
             update_keys = dict(registration_id=keys['registration_id'])
             for key in update_fields:
                 if key in keys:
@@ -1874,10 +1881,7 @@ class Auth(object):
         self.user = user
         self.update_groups()
 
-    def login_bare(self, username, password):
-        """
-        logins user as specified by usernname (or email) and password
-        """
+    def _get_login_settings(self):
         table_user = self.table_user()
         if self.settings.login_userfield:
             userfield = self.settings.login_userfield
@@ -1886,19 +1890,57 @@ class Auth(object):
         else:
             userfield = 'email'
         passfield = self.settings.password_field
-        user = self.db(table_user[userfield] == username).select().first()
-        if user and user.get(passfield, False):
-            password = table_user[passfield].validate(password)[0]
-            if not user.registration_key and password == user[passfield]:
+        return Storage({"table_user": table_user,
+                        "userfield": userfield,
+                        "passfield": passfield})
+
+    def login_bare(self, username, password):
+        """
+        logins user as specified by username (or email) and password
+        """
+        settings = self._get_login_settings()
+        user = settings.table_user(**{settings.userfield: \
+                       username})
+        if user and user.get(settings.passfield, False):
+            password = settings.table_user[
+                settings.passfield].validate(password)[0]
+            if not user.registration_key and password == \
+                user[settings.passfield]:
                 self.login_user(user)
                 return user
         else:
             # user not in database try other login methods
             for login_method in self.settings.login_methods:
-                if login_method != self and login_method(username, password):
+                if login_method != self and \
+                    login_method(username, password):
                     self.user = username
                     return username
         return False
+
+    def register_bare(self, **fields):
+        """
+        registers a user as specified by username (or email)
+        and a raw password.
+        """
+        settings = self._get_login_settings()
+        if not fields.get(settings.passfield):
+            raise ValueError("register_bare: " +
+                             "password not provided or invalid")
+        elif not fields.get(settings.userfield):
+            raise ValueError("register_bare: " +
+                             "userfield not provided or invalid")
+        fields[settings.passfield
+            ] = settings.table_user[settings.passfield].validate(
+                    fields[settings.passfield])[0]
+        user = self.get_or_create_user(fields, login=False,
+                   get=False,
+                   update_fields=self.settings.update_fields)
+        if not user:
+            # get or create did not create a user (it ignores
+            # duplicate records)
+            return False
+        return user
+
 
     def cas_login(
         self,
@@ -2038,17 +2080,18 @@ class Auth(object):
         except:
             pass
 
-        ### use session for federated login
-        if self.next:
-            session._auth_next = self.next
+        ### use session for federated login        
+        snext = self.get_vars_next()
+        if snext:
+            session._auth_next = snext
         elif session._auth_next:
-            self.next = session._auth_next
+            snext = session._auth_next
         ### pass
 
         if next is DEFAULT:
             # important for security
             next = self.settings.login_next
-            user_next = self.next
+            user_next = snext
             if user_next:
                 external = user_next.split('://')
                 if external[0].lower() in ['http', 'https', 'ftp']:
@@ -2125,8 +2168,7 @@ class Auth(object):
 
                 accepted_form = True
                 # check for username in db
-                user = self.db(table_user[username]
-                               == form.vars[username]).select().first()
+                user = table_user(**{username: form.vars[username]})
                 if user:
                     # user in db, check if registration pending or disabled
                     temp_user = user
@@ -2292,7 +2334,7 @@ class Auth(object):
             redirect(self.settings.logged_url,
                      client_side=self.settings.client_side)
         if next is DEFAULT:
-            next = self.next or self.settings.register_next
+            next = self.get_vars_next() or self.settings.register_next
         if onvalidation is DEFAULT:
             onvalidation = self.settings.register_onvalidation
         if onaccept is DEFAULT:
@@ -2397,9 +2439,7 @@ class Auth(object):
                 if not self.settings.registration_requires_verification:
                     table_user[form.vars.id] = dict(registration_key='')
                 session.flash = self.messages.registration_successful
-                user = self.db(
-                    table_user[username] == form.vars[username]
-                    ).select().first()
+                user = table_user(**{username: form.vars[username]})
                 self.login_user(user)
                 session.flash = self.messages.logged_in
             self.log_event(log, form.vars)
@@ -2487,7 +2527,7 @@ class Auth(object):
             response.flash = self.messages.function_disabled
             return ''
         if next is DEFAULT:
-            next = self.next or self.settings.retrieve_username_next
+            next = self.get_vars_next() or self.settings.retrieve_username_next
         if onvalidation is DEFAULT:
             onvalidation = self.settings.retrieve_username_onvalidation
         if onaccept is DEFAULT:
@@ -2569,7 +2609,7 @@ class Auth(object):
             response.flash = self.messages.function_disabled
             return ''
         if next is DEFAULT:
-            next = self.next or self.settings.retrieve_password_next
+            next = self.get_vars_next() or self.settings.retrieve_password_next
         if onvalidation is DEFAULT:
             onvalidation = self.settings.retrieve_password_onvalidation
         if onaccept is DEFAULT:
@@ -2645,7 +2685,7 @@ class Auth(object):
         session = current.session
 
         if next is DEFAULT:
-            next = self.next or self.settings.reset_password_next
+            next = self.get_vars_next() or self.settings.reset_password_next
         try:
             key = request.vars.key or getarg(-1)
             t0 = int(key.split('-')[0])
@@ -2706,7 +2746,7 @@ class Auth(object):
                 (self.settings.retrieve_password_captcha != False and self.settings.captcha)
 
         if next is DEFAULT:
-            next = self.next or self.settings.request_reset_password_next
+            next = self.get_vars_next() or self.settings.request_reset_password_next
         if not self.settings.mailer:
             response.flash = self.messages.function_disabled
             return ''
@@ -2809,7 +2849,7 @@ class Auth(object):
         request = current.request
         session = current.session
         if next is DEFAULT:
-            next = self.next or self.settings.change_password_next
+            next = self.get_vars_next() or self.settings.change_password_next
         if onvalidation is DEFAULT:
             onvalidation = self.settings.change_password_onvalidation
         if onaccept is DEFAULT:
@@ -2839,7 +2879,7 @@ class Auth(object):
                         onvalidation=onvalidation,
                         hideerror=self.settings.hideerror):
 
-            if not form.vars['old_password'] == s.select().first()[passfield]:
+            if not form.vars['old_password'] == s.select(limitby=(0,1), orderby_on_limitby=False).first()[passfield]:
                 form.errors['old_password'] = self.messages.invalid_password
             else:
                 d = {passfield: str(form.vars.new_password)}
@@ -2878,7 +2918,7 @@ class Auth(object):
         request = current.request
         session = current.session
         if next is DEFAULT:
-            next = self.next or self.settings.profile_next
+            next = self.get_vars_next() or self.settings.profile_next
         if onvalidation is DEFAULT:
             onvalidation = self.settings.profile_onvalidation
         if onaccept is DEFAULT:
@@ -3277,7 +3317,7 @@ class Auth(object):
         if group_id == 0:
             group_id = self.user_group()
         record = self.db(permission.group_id == group_id)(permission.name == name)(permission.table_name == str(table_name))(
-                permission.record_id == long(record_id)).select().first()
+                permission.record_id == long(record_id)).select(limitby=(0,1), orderby_on_limitby=False).first()
         if record:
             id = record.id
         else:
@@ -4541,8 +4581,6 @@ class Service(object):
                 data = json_parser.loads(request.body.read())
             except ValueError: # decoding error in json lib
                 return return_error(None, -32700)
-            except json_parser.JSONDecodeError: # decoding error in simplejson lib
-                return return_error(None, -32700)
 
         # Batch handling
         if isinstance(data, list) and not batch_element:
@@ -5106,7 +5144,7 @@ class Wiki(object):
                               requires=[IS_SLUG(),
                                         IS_NOT_IN_DB(db, 'wiki_page.slug')],
                               writable=False),
-                        Field('title', unique=True),
+                        Field('title', length=255, unique=True),
                         Field('body', 'text', notnull=True),
                         Field('tags', 'list:string'),
                         Field('can_read', 'list:string',
@@ -5163,7 +5201,7 @@ class Wiki(object):
                     db.wiki_tag.insert(name=tag, wiki_page=id)
 
         def update_tags_update(dbset, page, db=db):
-            page = dbset.select().first()
+            page = dbset.select(limitby=(0,1)).first()
             db(db.wiki_tag.wiki_page == page.id).delete()
             for tag in page.tags or []:
                 tag = tag.strip().lower()
