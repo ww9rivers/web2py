@@ -37,6 +37,7 @@ parameters*.py
 ./examples.w2p
 cron.master
 !applications/*
+applications/*.py[oc]
 applications/welcome
 applications/welcome/*
 applications/examples
