@@ -684,6 +684,11 @@ class BaseAdapter(ConnectionPool):
             return None
         return isinstance(exception, self.driver.OperationalError)
 
+    def isProgrammingError(self,exception):
+        if not hasattr(self.driver, "ProgrammingError"):
+            return None
+        return isinstance(exception, self.driver.ProgrammingError)
+
     def id_query(self, table):
         return table._id != None
 
@@ -1773,13 +1778,18 @@ class BaseAdapter(ConnectionPool):
         return list(tables)
 
     def commit(self):
-        if self.connection: return self.connection.commit()
+        if self.connection:
+            return self.connection.commit()
 
     def rollback(self):
-        if self.connection: return self.connection.rollback()
+        if self.connection:
+            return self.connection.rollback()
 
     def close_connection(self):
-        if self.connection: return self.connection.close()
+        if self.connection: 
+            r = self.connection.close()
+            self.connection = None
+            return r
 
     def distributed_transaction_begin(self, key):
         return
@@ -4328,7 +4338,8 @@ class DatabaseStoredFile:
             if db.executesql(query):
                 return True
         except Exception, e:
-            if not db._adapter.isOperationalError(e):
+            if not (db._adapter.isOperationalError(e) or
+                    db._adapter.isProgrammingError(e)):
                 raise
             # no web2py_filesystem found?
             tb = traceback.format_exc()
@@ -5656,7 +5667,7 @@ class MongoDBAdapter(NoSQLAdapter):
         items = [self.expand(item, first.type) for item in second]
         return {self.expand(first) : {"$in" : items} }
 
-    def EQ(self,first,second):
+    def EQ(self,first,second=None):
         result = {}
         result[self.expand(first)] = self.expand(second)
         return result
@@ -5830,7 +5841,7 @@ class IMAPAdapter(NoSQLAdapter):
     uid         string
     answered    boolean        Flag
     created     date
-    content     list:string    A list of text or html parts
+    content     list:string    A list of dict text or html parts
     to          string
     cc          string
     bcc         string
@@ -5972,8 +5983,9 @@ class IMAPAdapter(NoSQLAdapter):
 
         """ MESSAGE is an identifier for sequence number"""
 
-        self.flags = ['\\Deleted', '\\Draft', '\\Flagged',
-                      '\\Recent', '\\Seen', '\\Answered']
+        self.flags = {'deleted': '\\Deleted', 'draft': '\\Draft',
+                      'flagged': '\\Flagged', 'recent': '\\Recent',
+                      'seen': '\\Seen', 'answered': '\\Answered'}
         self.search_fields = {
             'id': 'MESSAGE', 'created': 'DATE',
             'uid': 'UID', 'sender': 'FROM',
@@ -6196,7 +6208,7 @@ class IMAPAdapter(NoSQLAdapter):
         return tablename
 
     def is_flag(self, flag):
-        if self.search_fields.get(flag, None) in self.flags:
+        if self.search_fields.get(flag, None) in self.flags.values():
             return True
         else:
             return False
@@ -6228,7 +6240,7 @@ class IMAPAdapter(NoSQLAdapter):
                             Field("uid", "string", writable=False),
                             Field("answered", "boolean"),
                             Field("created", "datetime", writable=False),
-                            Field("content", "list:string", writable=False),
+                            Field("content", list, writable=False),
                             Field("to", "string", writable=False),
                             Field("cc", "string", writable=False),
                             Field("bcc", "string", writable=False),
@@ -6445,23 +6457,23 @@ class IMAPAdapter(NoSQLAdapter):
                 maintype = part.get_content_maintype()
                 if ("%s.attachments" % tablename in colnames) or \
                    ("%s.content" % tablename in colnames):
-                    if "%s.attachments" % tablename in colnames:
-                        if not ("text" in maintype):
-                            payload = part.get_payload(decode=True)
-                            if payload:
-                                attachment = {
-                                    "payload": payload,
-                                    "filename": part.get_filename(),
-                                    "encoding": part.get_content_charset(),
-                                    "mime": part.get_content_type(),
-                                    "disposition": part["Content-Disposition"]}
-                                attachments.append(attachment)
-                    if "%s.content" % tablename in colnames:
-                        payload = part.get_payload(decode=True)
-                        part_charset = self.get_charset(part)
-                        if "text" in maintype:
-                            if payload:
-                                content.append(self.encode_text(payload, part_charset))
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        filename = part.get_filename()
+                        values = {"mime": part.get_content_type()}
+                        if ((filename or not "text" in maintype) and
+                            ("%s.attachments" % tablename in colnames)):
+                            values.update({"payload": payload,
+                                "filename": filename,
+                                "encoding": part.get_content_charset(),
+                                "disposition": part["Content-Disposition"]})
+                            attachments.append(values)
+                        elif (("text" in maintype) and
+                              ("%s.content" % tablename in colnames)):
+                            values.update({"text": self.encode_text(payload,
+                                               self.get_charset(part))})
+                            content.append(values)
+
                 if "%s.size" % tablename in colnames:
                     if part is not None:
                         size += len(str(part))
@@ -6482,6 +6494,71 @@ class IMAPAdapter(NoSQLAdapter):
         colnames = colnames
         processor = attributes.get('processor',self.parse)
         return processor(imapqry_array, fields, colnames)
+
+    def _insert(self, table, fields):
+        def add_payload(message, obj):
+            payload = Message()
+            charset = obj.get("encoding", "utf-8")
+            payload.set_type(obj.get("mime", None))
+            payload.set_charset(charset)
+            if "text" in obj:
+                payload.set_payload(obj["text"])
+            elif "payload" in obj:
+                payload.set_payload(obj["payload"])
+            if "filename" in obj and obj["filename"]:
+                payload.add_header("Content-Disposition",
+                    "attachment", filename=obj["filename"])
+            message.attach(payload)
+
+        mailbox = table.mailbox
+        d = dict(((k.name, v) for k, v in fields))
+        date_time = (d.get("created", datetime.datetime.now())).timetuple()
+        if len(d) > 0:
+            message = d.get("email", None)
+            attachments = d.get("attachments", [])
+            content = d.get("content", [])
+            flags = " ".join(["\\%s" % flag.capitalize() for flag in
+                     ("answered", "deleted", "draft", "flagged",
+                      "recent", "seen") if d.get(flag, False)])
+            if not message:
+                from email.message import Message
+                mime = d.get("mime", None)
+                charset = d.get("encoding", None)
+                message = Message()
+                message["from"] = d.get("sender", "")
+                message["subject"] = d.get("subject", "")
+                if mime:
+                    message.set_type(mime)
+                if charset:
+                    message.set_charset(charset)
+                for item in ("to", "cc", "bcc"):
+                    value = d.get(item, "")
+                    if isinstance(value, basestring):
+                        message[item] = value
+                    else:
+                        message[item] = ";".join([i for i in
+                            value])
+                if not message.is_multipart():
+                    if isinstance(content, basestring):
+                        message.set_payload(content)
+                    elif len(content) > 0:
+                        message.set_payload(content[0]["text"])
+                else:
+                    [add_payload(message, c) for c in content]
+                    [add_payload(message, a) for a in attachments]
+                message = message.as_string()
+            return (mailbox, flags, date_time, message)
+        else:
+            raise NotImplementedError("IMAP empty insert is not implemented")
+
+    def insert(self, table, fields):
+        values = self._insert(table, fields)
+        result, data = self.connection.append(*values)
+        if result == "OK":
+            uid = int(re.findall("\d+", str(data))[-1])
+            return self.db(table.uid==uid).select(table.id).first().id
+        else:
+            raise Exception("IMAP message append failed: %s" % data)
 
     def _update(self, tablename, query, fields, commit=False):
         # TODO: the adapter should implement an .expand method
@@ -6716,7 +6793,7 @@ class IMAPAdapter(NoSQLAdapter):
             elif name == "DATE":
                 result = "ON %s" % self.convert_date(second)
 
-            elif name in self.flags:
+            elif name in self.flags.values():
                 if second:
                     result = "%s" % (name.upper()[1:])
                 else:
@@ -6855,7 +6932,7 @@ def sqlhtml_validators(field):
                 refs = reduce(lambda a,b:a&b, [count(ids[i:i+30]) for i in rx])
             else:
                 refs = db(id.belongs(ids)).select(id)
-            return (refs and ', '.join(str(f(r,x.id)) for x in refs) or '')
+            return (refs and ', '.join(f(r,x.id) for x in refs) or '')            
         field.represent = field.represent or list_ref_repr
         if hasattr(referenced, '_format') and referenced._format:
             requires = validators.IS_IN_DB(db,referenced._id,
@@ -8651,6 +8728,32 @@ class Table(object):
                 new_fields[key] = value
         if not response.errors:
             response.id = self.insert(**new_fields)
+        else:
+            response.id = None
+        return response
+
+    def validate_and_update(self, _key=DEFAULT, **fields):
+        response = Row()
+        response.errors = Row()
+        new_fields = copy.copy(fields)
+
+        for key,value in fields.iteritems():
+            value,error = self[key].validate(value)
+            if error:
+                response.errors[key] = "%s" % error
+            else:
+                new_fields[key] = value
+
+        if _key is DEFAULT:
+           record = self(**values)
+        elif isinstance(_key,dict):
+            record = self(**_key)
+        else:
+            record = self(_key)
+
+        if not response.errors and record:
+            row = self._db(self._id==_key)
+            response.id = row.update(**fields)
         else:
             response.id = None
         return response

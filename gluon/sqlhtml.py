@@ -1750,7 +1750,7 @@ class SQLFORM(FORM):
              oncreate=None,
              onupdate=None,
              ondelete=None,
-             sorter_icons=(XML('&#x2191;'), XML('&#x2193;')),
+             sorter_icons=(XML('&#x25B2;'), XML('&#x25BC;')),
              ui = 'web2py',
              showbuttontext=True,
              _class="web2py_grid",
@@ -2209,9 +2209,8 @@ class SQLFORM(FORM):
                     elif key == order[1:]:
                         marker = sorter_icons[1]
                 else:
-                    print 'a', key, ordermatch
                     if key == ordermatch:
-                        key, marker = '~' + order, sorter_icons[0]
+                        key, marker = '~' + ordermatch, sorter_icons[0]
                     elif key == ordermatch[1:]:
                         marker = sorter_icons[1]
                 header = A(header, marker, _href=url(vars=dict(
@@ -3096,10 +3095,7 @@ class ExporterHTML(ExportClass):
         ExportClass.__init__(self, rows)
 
     def export(self):
-        if self.rows:
-            return self.rows.xml()
-        else:
-            return '<html>\n<body>\n<table>\n</table>\n</body>\n</html>'
+        return '<html>\n<head>\n<meta http-equiv="content-type" content="text/html; charset=UTF-8" />\n</head>\n<body>\n%s\n</body>\n</html>' % (self.rows.xml() or '')
 
 class ExporterXML(ExportClass):
     label = 'XML'

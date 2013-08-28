@@ -86,10 +86,11 @@ def safe_write(a, value, b='w'):
 
 def get_app(name=None):
     app = name or request.args(0)
-    if app and (not MULTI_USER_MODE or is_manager() or
-                db(db.app.name == app)(db.app.owner == auth.user.id).count()):
+    if (app and os.path.exists(apath(app, r=request)) and 
+        (not MULTI_USER_MODE or is_manager() or
+         db(db.app.name == app)(db.app.owner == auth.user.id).count())):
         return app
-    session.flash = T('App does not exist or your are not authorized')
+    session.flash = T('App does not exist or you are not authorized')
     redirect(URL('site'))
 
 
@@ -296,8 +297,8 @@ def site():
         apps = [f for f in apps if f in FILTER_APPS]
 
     apps = sorted(apps, lambda a, b: cmp(a.upper(), b.upper()))
-
-    return dict(app=None, apps=apps, myversion=myversion,
+    myplatform = platform.python_version()
+    return dict(app=None, apps=apps, myversion=myversion, myplatform=myplatform,
                 form_create=form_create, form_update=form_update)
 
 
