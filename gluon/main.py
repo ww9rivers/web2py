@@ -500,10 +500,11 @@ def wsgibase(environ, responder):
                 # ##################################################
 
                 rcookies = response.cookies
-                if session._forget and response.session_id_name in rcookies:
-                    del rcookies[response.session_id_name]
-                elif session._secure:
-                    rcookies[response.session_id_name]['secure'] = True
+                if response.session_id_name in rcookies:
+                    if session._forget:
+                        del rcookies[response.session_id_name]
+                    elif session._secure:
+                        rcookies[response.session_id_name]['secure'] = True
                 http_response.cookies2headers(rcookies)
                 ticket = None
 
