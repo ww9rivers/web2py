@@ -14,7 +14,6 @@ Contains:
 
 if False: import import_all # DO NOT REMOVE PART OF FREEZE PROCESS
 import gc
-import cStringIO
 import Cookie
 import os
 import re
@@ -35,15 +34,15 @@ except:
     try:
         import json as sj #standard installed library
     except:
-        import contrib.simplejson as sj #pure python library
+        import gluon.contrib.simplejson as sj #pure python library
 
 from thread import allocate_lock
 
-from fileutils import abspath, write_file
-from settings import global_settings
-from utils import web2py_uuid
-from admin import add_path_first, create_missing_folders, create_missing_app_folders
-from globals import current
+from gluon.fileutils import abspath, write_file
+from gluon.settings import global_settings
+from gluon.utils import web2py_uuid
+from gluon.admin import add_path_first, create_missing_folders, create_missing_app_folders
+from gluon.globals import current
 
 #  Remarks:
 #  calling script has inserted path to script directory into sys.path
@@ -90,19 +89,19 @@ else:
     logging.basicConfig()
 logger = logging.getLogger("web2py")
 
-from restricted import RestrictedError
-from http import HTTP, redirect
-from globals import Request, Response, Session
-from compileapp import build_environment, run_models_in, \
+from gluon.restricted import RestrictedError
+from gluon.http import HTTP, redirect
+from gluon.globals import Request, Response, Session
+from gluon.compileapp import build_environment, run_models_in, \
     run_controller_in, run_view_in
-from contenttype import contenttype
-from dal import BaseAdapter
-from validators import CRYPT
-from html import URL, xmlescape
-from utils import is_valid_ip_address, getipaddrinfo
-from rewrite import load, url_in, THREAD_LOCAL as rwthread, \
+from gluon.contenttype import contenttype
+from gluon.dal import BaseAdapter
+from gluon.validators import CRYPT
+from gluon.html import URL, xmlescape
+from gluon.utils import is_valid_ip_address, getipaddrinfo
+from gluon.rewrite import load, url_in, THREAD_LOCAL as rwthread, \
     try_rewrite_on_error, fixup_missing_path_info
-import newcron
+from gluon import newcron
 
 __all__ = ['wsgibase', 'save_password', 'appfactory', 'HttpServer']
 
@@ -124,7 +123,7 @@ except:
     raise RuntimeError("Cannot determine web2py version")
 
 try:
-    import rocket
+    from gluon import rocket
 except:
     if not global_settings.web2py_runtime_gae:
         logger.warn('unable to import Rocket')
@@ -397,15 +396,8 @@ def wsgibase(environ, responder):
                         raise HTTP(404, rwthread.routes.error_message
                                    % 'invalid request',
                                    web2py_error='invalid application')
-                elif request.is_local and exists(disabled):
-                    data = dict([item.strip() for item in line.split(':',1)]
-                                for line in open(disabled) if line.strip())
-                    if data.get('disabled','True').lower() != 'false':
-                        if 'redirect' in data:
-                            redirect(data['redirect'])
-                        if 'message' in data:
-                            raise HTTP(503, data['message'])
-                        raise HTTP(503, "<html><body><h1>Temporarily down for maintenance</h1></body></html>")
+                elif not request.is_local and exists(disabled):
+                    raise HTTP(503, "<html><body><h1>Temporarily down for maintenance</h1></body></html>")
 
                 # ##################################################
                 # build missing folders
@@ -461,44 +453,53 @@ def wsgibase(environ, responder):
                 if request.body:
                     request.body.close()
 
-                # ##################################################
-                # on success, try store session in database
-                # ##################################################
-                session._try_store_in_db(request, response)
+                if hasattr(current,'request'):
 
-                # ##################################################
-                # on success, commit database
-                # ##################################################
+                    # ##################################################
+                    # on success, try store session in database
+                    # ##################################################
+                    session._try_store_in_db(request, response)
 
-                if response.do_not_commit is True:
-                    BaseAdapter.close_all_instances(None)
-                # elif response._custom_commit:
-                #     response._custom_commit()
-                elif response.custom_commit:
-                    BaseAdapter.close_all_instances(response.custom_commit)
-                else:
-                    BaseAdapter.close_all_instances('commit')
+                    # ##################################################
+                    # on success, commit database
+                    # ##################################################
 
-                # ##################################################
-                # if session not in db try store session on filesystem
-                # this must be done after trying to commit database!
-                # ##################################################
+                    if response.do_not_commit is True:
+                        BaseAdapter.close_all_instances(None)
+                    elif response.custom_commit:
+                        BaseAdapter.close_all_instances(response.custom_commit)
+                    else:
+                        BaseAdapter.close_all_instances('commit')
 
-                session._try_store_in_cookie_or_file(request, response)
+                    # ##################################################
+                    # if session not in db try store session on filesystem
+                    # this must be done after trying to commit database!
+                    # ##################################################
 
-                if request.cid:
-                    if response.flash:
-                        http_response.headers['web2py-component-flash'] = \
-                            urllib2.quote(xmlescape(response.flash)\
-                                              .replace('\n',''))
-                    if response.js:
-                        http_response.headers['web2py-component-command'] = \
-                            urllib2.quote(response.js.replace('\n',''))
+                    session._try_store_in_cookie_or_file(request, response)
 
-                # ##################################################
-                # store cookies in headers
-                # ##################################################
+                    # Set header so client can distinguish component requests.
+                    if request.cid:
+                        http_response.headers.setdefault(
+                            'web2py-component-content', 'replace')
 
+                    if request.ajax:
+                        if response.flash:
+                            http_response.headers['web2py-component-flash'] = \
+                                urllib2.quote(xmlescape(response.flash)\
+                                                  .replace('\n',''))
+                        if response.js:
+                            http_response.headers['web2py-component-command'] = \
+                                urllib2.quote(response.js.replace('\n',''))
+
+                    # ##################################################
+                    # store cookies in headers
+                    # ##################################################
+
+                    session._fixup_before_save()
+                    http_response.cookies2headers(response.cookies)
+
+                # <<<<<<< HEAD
                 rcookies = response.cookies
                 if response.session_id_name in rcookies:
                     if session._forget:
@@ -506,6 +507,8 @@ def wsgibase(environ, responder):
                     elif session._secure:
                         rcookies[response.session_id_name]['secure'] = True
                 http_response.cookies2headers(rcookies)
+                # =======
+                # >>>>>>> 8bdc5f20e73c519e875a2eed412f5008a5097e15
                 ticket = None
 
             except RestrictedError, e:
@@ -608,7 +611,8 @@ def save_password(password, port):
 
 def appfactory(wsgiapp=wsgibase,
                logfilename='httpserver.log',
-               profiler_dir=None):
+               profiler_dir=None,
+               profilerfilename=None):
     """
     generates a wsgi application that does logging and profiling and calls
     wsgibase
@@ -619,7 +623,8 @@ def appfactory(wsgiapp=wsgibase,
             [, profilerfilename='profiler.log']]])
 
     """
-
+    if profilerfilename is not None:
+        raise BaseException("Deprecated API")
     if profiler_dir:
         profiler_dir = abspath(profiler_dir)
         logger.warn('profiler is on. will use dir %s', profiler_dir)
@@ -627,14 +632,14 @@ def appfactory(wsgiapp=wsgibase,
             try:
                 os.makedirs(profiler_dir)
             except:
-                raise BaseException, "Can't create dir %s" % profiler_dir
+                raise BaseException("Can't create dir %s" % profiler_dir)
         filepath = pjoin(profiler_dir, 'wtest')
         try:
             filehandle = open( filepath, 'w' )
             filehandle.close()
             os.unlink(filepath)
         except IOError:
-            raise BaseException, "Unable to write to dir %s" % profiler_dir
+            raise BaseException("Unable to write to dir %s" % profiler_dir)
 
     def app_with_logging(environ, responder):
         """

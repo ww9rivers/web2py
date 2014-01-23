@@ -24,9 +24,9 @@ import marshal
 from HTMLParser import HTMLParser
 from htmlentitydefs import name2codepoint
 
-from storage import Storage
-from utils import web2py_uuid, simple_hash, compare
-from highlight import highlight
+from gluon.storage import Storage
+from gluon.utils import web2py_uuid, simple_hash, compare
+from gluon.highlight import highlight
 
 regex_crlf = re.compile('\r|\n')
 
@@ -841,8 +841,8 @@ class DIV(XmlComponent):
                 c.latest = self.latest
                 c.session = self.session
                 c.formname = self.formname
-                c['hideerror'] = hideerror or \
-                        self.attributes.get('hideerror', False)
+                if not c.attributes.get('hideerror'):
+                    c['hideerror'] = hideerror or self.attributes.get('hideerror')
                 newstatus = c._traverse(status, hideerror) and newstatus
 
         # for input, textarea, select, option
@@ -1484,7 +1484,7 @@ class A(DIV):
         if not self['_disable_with']:
             self['_data-w2p_disable_with'] = 'default'
         if self['callback'] and not self['_id']:
-            self['_id'] = web2py_uuid()        
+            self['_id'] = web2py_uuid()
         if self['delete']:
             self['_data-w2p_remove'] = self['delete']
         if self['target']:
@@ -1961,7 +1961,7 @@ class FORM(DIV):
     example::
 
         >>> from validators import IS_NOT_EMPTY
-        >>> form=FORM(INPUT(_name=\"test\", requires=IS_NOT_EMPTY()))
+        >>> form=FORM(INPUT(_name="test", requires=IS_NOT_EMPTY()))
         >>> form.xml()
         '<form action=\"#\" enctype=\"multipart/form-data\" method=\"post\"><input name=\"test\" type=\"text\" /></form>'
 
@@ -2017,10 +2017,14 @@ class FORM(DIV):
         changed = False
         request_vars = self.request_vars
         if session is not None:
-            formkey = session.get('_formkey[%s]' % formname, None)
+            formkey = request_vars._formkey
+            keyname = '_formkey[%s]' % formname
+            formkeys = list(session.get(keyname, []))
             # check if user tampering with form and void CSRF
-            if not formkey or formkey != request_vars._formkey:
+            if not (formkey and formkeys and formkey in formkeys):
                 status = False
+            else:
+                session[keyname].remove(formkey)
         if formname != request_vars._formname:
             status = False
         if status and session:
@@ -2056,7 +2060,9 @@ class FORM(DIV):
                 formkey = self.record_hash
             else:
                 formkey = web2py_uuid()
-            self.formkey = session['_formkey[%s]' % formname] = formkey
+            self.formkey = formkey
+            keyname = '_formkey[%s]' % formname
+            session[keyname] = list(session.get(keyname,[]))[-9:] + [formkey]
         if status and not keepvalues:
             self._traverse(False, hideerror)
         self.accepted = status
@@ -2457,15 +2463,23 @@ class MENU(DIV):
     def serialize_mobile(self, data, select=None, prefix=''):
         if not select:
             select = SELECT(**self.attributes)
+        custom_items = []
         for item in data:
-            if len(item) <= 4 or item[4] == True:
+            # Custom item aren't serialized as mobile
+            if len(item) >= 3 and (not item[0]) or (isinstance(item[0], DIV) and not (item[2])):
+            # ex: ('', False,A('title',_href=URL(...),_title="title"))
+            # ex: (A('title',_href=URL(...),_title="title"), False, None)
+                custom_items.append(item)
+            elif len(item) <= 4 or item[4] == True:
                 select.append(OPTION(CAT(prefix, item[0]),
                                      _value=item[2], _selected=item[1]))
                 if len(item) > 3 and len(item[3]):
                     self.serialize_mobile(
                         item[3], select, prefix=CAT(prefix, item[0], '/'))
         select['_onchange'] = 'window.location=this.value'
-        return select
+        # avoid to wrap the select if no custom items are present
+        html = DIV(select,  self.serialize(custom_items)) if len( custom_items) else select
+        return html
 
     def xml(self):
         if self['mobile']:
@@ -2501,11 +2515,11 @@ def test():
     Example:
 
     >>> from validators import *
-    >>> print DIV(A('click me', _href=URL(a='a', c='b', f='c')), BR(), HR(), DIV(SPAN(\"World\"), _class='unknown')).xml()
+    >>> print DIV(A('click me', _href=URL(a='a', c='b', f='c')), BR(), HR(), DIV(SPAN("World"), _class='unknown')).xml()
     <div><a data-w2p_disable_with="default" href="/a/b/c">click me</a><br /><hr /><div class=\"unknown\"><span>World</span></div></div>
-    >>> print DIV(UL(\"doc\",\"cat\",\"mouse\")).xml()
+    >>> print DIV(UL("doc","cat","mouse")).xml()
     <div><ul><li>doc</li><li>cat</li><li>mouse</li></ul></div>
-    >>> print DIV(UL(\"doc\", LI(\"cat\", _class='feline'), 18)).xml()
+    >>> print DIV(UL("doc", LI("cat", _class='feline'), 18)).xml()
     <div><ul><li>doc</li><li class=\"feline\">cat</li><li>18</li></ul></div>
     >>> print TABLE(['a', 'b', 'c'], TR('d', 'e', 'f'), TR(TD(1), TD(2), TD(3))).xml()
     <table><tr><td>a</td><td>b</td><td>c</td></tr><tr><td>d</td><td>e</td><td>f</td></tr><tr><td>1</td><td>2</td><td>3</td></tr></table>
@@ -2531,7 +2545,7 @@ def test():
     >>> print form.xml()
     <form action="#" enctype="multipart/form-data" method="post"><input class="invalidinput" name="myvar" type="text" value="as df" /><div class="error_wrapper"><div class="error" id="myvar__error">only alphanumeric!</div></div></form>
     >>> session={}
-    >>> form=FORM(INPUT(value=\"Hello World\", _name=\"var\", requires=IS_MATCH('^\w+$')))
+    >>> form=FORM(INPUT(value="Hello World", _name="var", requires=IS_MATCH('^\w+$')))
     >>> isinstance(form.as_dict(), dict)
     True
     >>> form.as_dict(flat=True).has_key("vars")
@@ -2705,7 +2719,7 @@ class MARKMIN(XmlComponent):
         """
         calls the gluon.contrib.markmin render function to convert the wiki syntax
         """
-        from contrib.markmin.markmin2html import render
+        from gluon.contrib.markmin.markmin2html import render
         return render(self.text, extra=self.extra,
                       allowed=self.allowed, sep=self.sep, latex=self.latex,
                       URL=self.url, environment=self.environment,

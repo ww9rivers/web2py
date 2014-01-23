@@ -13,6 +13,9 @@ def index():
     """
     example action using the internationalization operator T and flash
     rendered by views/default/index.html or views/generic.html
+
+    if you need a simple wiki simply replace the two lines below with:
+    return auth.wiki()
     """
     html = P(SPAN('The home page main content is still being developed. Please '),
              SPAN(''  if auth.is_logged_in() else [A('login', _href=URL('user/login')), ' and ']),
@@ -29,6 +32,7 @@ def user():
     http://..../[app]/default/user/profile
     http://..../[app]/default/user/retrieve_password
     http://..../[app]/default/user/change_password
+    http://..../[app]/default/user/manage_users (requires membership in
     use @auth.requires_login()
         @auth.requires_membership('group name')
         @auth.requires_permission('read','table name',record_id)

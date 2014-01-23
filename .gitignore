@@ -56,3 +56,4 @@ applications/admin/cron/cron.master
 HOWTO-web2py-devel
 *.sublime-project
 *.sublime-workspace
+.idea/*

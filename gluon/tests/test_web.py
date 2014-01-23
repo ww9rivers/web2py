@@ -120,9 +120,9 @@ class TestWeb(LiveTest):
 
         # check registration and login were successful
         client.get('index')
-        
+
         # COMMENTED BECAUSE FAILS BUT WHY?
-        # self.assertTrue('Welcome Homer' in client.text)
+        self.assertTrue('Welcome Homer' in client.text)
 
         client = WebClient('http://127.0.0.1:8000/admin/default/')
         client.post('index', data=dict(password='hello'))

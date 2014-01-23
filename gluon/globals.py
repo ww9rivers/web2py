@@ -14,17 +14,17 @@ Contains the classes for the global used variables:
 
 """
 
-from storage import Storage, List
-from streamer import streamer, stream_file_or_304_or_206, DEFAULT_CHUNK_SIZE
-from xmlrpc import handler
-from contenttype import contenttype
-from html import xmlescape, TABLE, TR, PRE, URL
-from http import HTTP, redirect
-from fileutils import up
-from serializers import json, custom_json
-import settings
-from utils import web2py_uuid, secure_dumps, secure_loads
-from settings import global_settings
+from gluon.storage import Storage, List
+from gluon.streamer import streamer, stream_file_or_304_or_206, DEFAULT_CHUNK_SIZE
+from gluon.xmlrpc import handler
+from gluon.contenttype import contenttype
+from gluon.html import xmlescape, TABLE, TR, PRE, URL
+from gluon.http import HTTP, redirect
+from gluon.fileutils import up
+from gluon.serializers import json, custom_json
+import gluon.settings as settings
+from gluon.utils import web2py_uuid, secure_dumps, secure_loads
+from gluon.settings import global_settings
 import hashlib
 import portalocker
 import cPickle
@@ -41,8 +41,8 @@ import threading
 import cgi
 import copy
 import tempfile
-from cache import CacheInRam
-from fileutils import copystream
+from gluon.cache import CacheInRam
+from gluon.fileutils import copystream
 
 FMT = '%a, %d-%b-%Y %H:%M:%S PST'
 PAST = 'Sat, 1-Jan-1971 00:00:00'
@@ -60,7 +60,7 @@ except:
     try:
         import json as sj #standard installed library
     except:
-        import contrib.simplejson as sj #pure python library
+        import gluon.contrib.simplejson as sj #pure python library
 
 regex_session_id = re.compile('^([\w\-]+/)?[\w\-\.]+$')
 
@@ -86,7 +86,7 @@ class SortingPickler(Pickler):
         self._batch_setitems([(key,obj[key]) for key in sorted(obj)])
 
 SortingPickler.dispatch = copy.copy(Pickler.dispatch)
-SortingPickler.dispatch[DictionaryType] = SortingPickler.save_dict          
+SortingPickler.dispatch[DictionaryType] = SortingPickler.save_dict
 
 def sorting_dumps(obj, protocol=None):
     file = cStringIO.StringIO()
@@ -211,12 +211,13 @@ class Request(Storage):
             body.seek(0)
 
         # parse POST variables on POST, PUT, BOTH only in post_vars
-        if (body and
-                env.request_method in ('POST', 'PUT', 'DELETE', 'BOTH') and
-                not is_json):
-            query_string = env.pop('QUERY_STRING') if 'QUERY_STRING' in env else None
+        if (body and not is_json
+            and env.request_method in ('POST', 'PUT', 'DELETE', 'BOTH')):
+            query_string = env.pop('QUERY_STRING',None)
             dpost = cgi.FieldStorage(fp=body, environ=env, keep_blank_values=1)
-            post_vars.update(dpost)
+            try:
+                post_vars.update(dpost)
+            except: pass
             if query_string is not None:
                 env['QUERY_STRING'] = query_string
             # The same detection used by FieldStorage to detect multipart POSTs
@@ -232,19 +233,13 @@ class Request(Storage):
                 if key is None:
                     continue  # not sure why cgi.FieldStorage returns None key
                 dpk = dpost[key]
-                # if an element is not a file replace it with its value else leave it alone
-                if isinstance(dpk, list):
-                    value = []
-                    for _dpk in dpk:
-                        if not _dpk.filename:
-                            value.append(_dpk.value)
-                        else:
-                            value.append(_dpk)
-                elif not dpk.filename:
-                    value = dpk.value
-                else:
-                    value = dpk
-                pvalue = listify(value)
+                # if an element is not a file replace it with 
+                # its value else leave it alone
+                
+                pvalue = listify([(_dpk if _dpk.filename else _dpk.value) 
+                                  for _dpk in dpk] 
+                                 if isinstance(dpk, list) else
+                                 (dpk if dpk.filename else dpk.value))
                 if len(pvalue):
                     post_vars[key] = (len(pvalue) > 1 and pvalue) or pvalue[0]
 
@@ -299,14 +294,14 @@ class Request(Storage):
     def user_agent(self):
         from gluon.contrib import user_agent_parser
         session = current.session
-        user_agent = session._user_agent or \
-            user_agent_parser.detect(self.env.http_user_agent)
-        if session:
-            session._user_agent = user_agent
-        user_agent = Storage(user_agent)
+        user_agent = session._user_agent
+        if user_agent:
+            return user_agent
+        user_agent = user_agent_parser.detect(self.env.http_user_agent)
         for key, value in user_agent.items():
             if isinstance(value, dict):
                 user_agent[key] = Storage(value)
+        user_agent = session._user_agent = Storage(user_agent)
         return user_agent
 
     def requires_https(self):
@@ -333,13 +328,12 @@ class Request(Storage):
                     _self.args[-1], _, self.extension = self.args[-1].rpartition('.')
                     current.response.headers['Content-Type'] = \
                         contenttype('.' + _self.extension.lower())
-                if not method in ['GET', 'POST', 'DELETE', 'PUT']:
-                    raise HTTP(400, "invalid method")
                 rest_action = _action().get(method, None)
-                if not rest_action:
+                if not (rest_action and method==method.upper() 
+                        and callable(rest_action)):
                     raise HTTP(400, "method not supported")
                 try:
-                    return rest_action(*_self.args, **_self.vars)
+                    return rest_action(*_self.args, **getattr(_self,'vars',{}))
                 except TypeError, e:
                     exc_type, exc_value, exc_traceback = sys.exc_info()
                     if len(traceback.extract_tb(exc_traceback)) == 1:
@@ -629,7 +623,7 @@ class Response(Storage):
     def toolbar(self):
         from html import DIV, SCRIPT, BEAUTIFY, TAG, URL, A
         BUTTON = TAG.button
-        admin = URL("admin", "default", "design",
+        admin = URL("admin", "default", "design", extension='html',
                     args=current.request.application)
         from gluon.dal import DAL
         dbstats = []
@@ -643,6 +637,12 @@ class Response(Storage):
                                lazy=v['dbtables']['lazy'] or '[no lazy tables]')
         u = web2py_uuid()
         backtotop = A('Back to top', _href="#totop-%s" % u)
+        # Convert lazy request.vars from property to Storage so they
+        # will be displayed in the toolbar.
+        request = copy.copy(current.request)
+        request.update(vars=current.request.vars,
+            get_vars=current.request.get_vars,
+            post_vars=current.request.post_vars)
         return DIV(
             BUTTON('design', _onclick="document.location='%s'" % admin),
             BUTTON('request',
@@ -655,7 +655,7 @@ class Response(Storage):
                    _onclick="jQuery('#db-tables-%s').slideToggle()" % u),
             BUTTON('db stats',
                    _onclick="jQuery('#db-stats-%s').slideToggle()" % u),
-            DIV(BEAUTIFY(current.request), backtotop,
+            DIV(BEAUTIFY(request), backtotop,
                 _class="hidden", _id="request-%s" % u),
             DIV(BEAUTIFY(current.session), backtotop,
                 _class="hidden", _id="session-%s" % u),
@@ -736,10 +736,11 @@ class Session(Storage):
         response.session_cookie_compression_level = compression_level
 
         # check if there is a session_id in cookies
-        try:
-            response.session_id = cookies[response.session_id_name].value
+        try:            
+            old_session_id = cookies[response.session_id_name].value
         except KeyError:
-            response.session_id = None
+            old_session_id = None
+        response.session_id = old_session_id
 
         # if we are supposed to use cookie based session data
         if cookie_key:
@@ -859,12 +860,30 @@ class Session(Storage):
                 else:
                     response.session_id = None
                     response.session_new = True
+            # if there is no session id yet, we'll need to create a 
+            # new session
+            else:
+                response.session_new = True
+
+        # set the cookie now if you know the session_id so user can set
+        # cookie attributes in controllers/models
+        # cookie will be reset later
+        # yet cookie may be reset later
+        #   Removed comparison between old and new session ids - should send
+        #    the cookie all the time
+        if isinstance(response.session_id,str):
+            response.cookies[response.session_id_name] = response.session_id
+            response.cookies[response.session_id_name]['path'] = '/'
+            if cookie_expires:
+                response.cookies[response.session_id_name]['expires'] = \
+                    cookie_expires.strftime(FMT)
+
+        session_pickled = cPickle.dumps(self)
+        response.session_hash = hashlib.md5(session_pickled).hexdigest()
 
         if self.flash:
             (response.flash, self.flash) = (self.flash, None)
 
-        session_pickled = cPickle.dumps(self)
-        response.session_hash = hashlib.md5(session_pickled).hexdigest()
 
     def renew(self, clear_session=False):
 
@@ -909,7 +928,7 @@ class Session(Storage):
                 return
             (record_id, sep, unique_key) = response.session_id.partition(':')
 
-            if record_id.isdigit() and long(record_id)>1:
+            if record_id.isdigit() and long(record_id)>0:
                 new_unique_key = web2py_uuid()
                 row = table(record_id)
                 if row and row.unique_key==unique_key:
@@ -922,6 +941,30 @@ class Session(Storage):
                 response.session_db_unique_key = new_unique_key
             else:
                 response.session_new = True
+
+    def _fixup_before_save(self):
+        response = current.response
+        rcookies = response.cookies
+        if self._forget and response.session_id_name in rcookies:
+            del rcookies[response.session_id_name]
+        elif self._secure and response.session_id_name in rcookies:
+            rcookies[response.session_id_name]['secure'] = True
+
+    def clear_session_cookies(sefl):
+        request = current.request
+        response = current.response
+        session = response.session
+        masterapp = response.session_masterapp
+        cookies = request.cookies
+        rcookies = response.cookies
+        # if not cookie_key, but session_data_name in cookies
+        # expire session_data_name from cookies
+        if response.session_data_name in cookies:
+            rcookies[response.session_data_name] = 'expired'
+            rcookies[response.session_data_name]['path'] = '/'
+            rcookies[response.session_data_name]['expires'] = PAST
+        if response.session_id_name in rcookies:
+            del rcookies[response.session_id_name]
 
     def save_session_id_cookie(self):
         request = current.request
@@ -940,12 +983,11 @@ class Session(Storage):
         if response.session_id:
             rcookies[response.session_id_name] = response.session_id
             rcookies[response.session_id_name]['path'] = '/'
-            if isinstance(response.session_cookie_expires,datetime.datetime):
-                rcookies[response.session_id_name]['expires'] = \
-                    response.session_cookie_expires.strftime(FMT)
-            elif isinstance(response.session_cookie_expires,str):
-                rcookies[response.session_id_name]['expires'] = \
-                    response.session_cookie_expires
+            expires = response.session_cookie_expires
+            if isinstance(expires,datetime.datetime):
+                expires = expires.strftime(FMT)
+            if expires:
+                rcookies[response.session_id_name]['expires'] = expires
 
     def clear(self):
         Storage.clear(self)
@@ -975,19 +1017,23 @@ class Session(Storage):
 
     def _try_store_in_cookie(self, request, response):
         if self._forget or self._unchanged(response):
+            # self.clear_session_cookies()
+            self.save_session_id_cookie()
             return False
         name = response.session_data_name
         compression_level = response.session_cookie_compression_level
         value = secure_dumps(dict(self),
                              response.session_cookie_key,
                              compression_level=compression_level)
-        expires = response.session_cookie_expires
         rcookies = response.cookies
         rcookies.pop(name, None)
         rcookies[name] = value
         rcookies[name]['path'] = '/'
+        expires = response.session_cookie_expires
+        if isinstance(expires,datetime.datetime):
+            expires = expires.strftime(FMT)
         if expires:
-            rcookies[name]['expires'] = expires.strftime(FMT)
+            rcookies[name]['expires'] = expires
         return True
 
     def _unchanged(self,response):
@@ -999,13 +1045,16 @@ class Session(Storage):
     def _try_store_in_db(self, request, response):
         # don't save if file-based sessions,
         # no session id, or session being forgotten
-        # or no changes to session
-
-        if not response.session_db_table or self._forget or self._unchanged(response):
+        # or no changes to session (Unless the session is new)
+        if (not response.session_db_table or 
+            self._forget or 
+            (self._unchanged(response) and not response.session_new)):
             if (not response.session_db_table and
                 global_settings.db_sessions is not True and
                 response.session_masterapp in global_settings.db_sessions):
                 global_settings.db_sessions.remove(response.session_masterapp)
+            # self.clear_session_cookies()
+            self.save_session_id_cookie()
             return False
 
         table = response.session_db_table
@@ -1042,7 +1091,10 @@ class Session(Storage):
 
     def _try_store_in_file(self, request, response):
         try:
-            if not response.session_id or self._forget or self._unchanged(response):
+            if (not response.session_id or self._forget 
+                or self._unchanged(response)):
+                # self.clear_session_cookies()
+                self.save_session_id_cookie()
                 return False
             if response.session_new or not response.session_file:
                 # Tests if the session sub-folder exists, if not, create it

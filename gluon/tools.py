@@ -22,6 +22,7 @@ import urllib
 import urllib2
 import Cookie
 import cStringIO
+import ConfigParser
 from email import MIMEBase, MIMEMultipart, MIMEText, Encoders, Header, message_from_string, Charset
 
 from gluon.contenttype import contenttype
@@ -45,7 +46,7 @@ except ImportError:
         import simplejson as json_parser
     except:
         # fallback to pure-Python module
-        import contrib.simplejson as json_parser
+        import gluon.contrib.simplejson as json_parser
 
 __all__ = ['Mail', 'Auth', 'Recaptcha', 'Crud', 'Service', 'Wiki',
            'PluginManager', 'fetch', 'geocode', 'prettydate']
@@ -882,6 +883,7 @@ class Auth(object):
         auth_manager_role=None,
         login_captcha=None,
         register_captcha=None,
+        pre_registration_div=None,
         retrieve_username_captcha=None,
         retrieve_password_captcha=None,
         captcha=None,
@@ -912,6 +914,7 @@ class Auth(object):
         use_username=False,
         login_email_validate=True,
         login_userfield=None,
+        multi_login=False,
         logout_onlogout=None,
         register_fields=None,
         register_verify_password=True,
@@ -921,6 +924,8 @@ class Auth(object):
         update_fields = ['email'],
         ondelete="CASCADE",
         client_side = True,
+        renew_session_onlogin=True,
+        renew_session_onlogout=True,
         keep_session_onlogin=True,
         keep_session_onlogout=False,
         wiki = Settings(),
@@ -939,6 +944,9 @@ class Auth(object):
         access_denied='Insufficient privileges',
         registration_verifying='Registration needs verification',
         registration_pending='Registration is pending approval',
+        email_taken='This email already has an account',
+        invalid_username='Invalid username',
+        username_taken='Username already taken',
         login_disabled='Login disabled by administrator',
         logged_in='Logged in',
         email_sent='Email sent',
@@ -953,7 +961,7 @@ class Auth(object):
         invalid_password='Invalid password',
         is_empty="Cannot be empty",
         mismatched_password="Password fields don't match",
-        verify_email='Click on the link %(link)s to verify your email',
+        verify_email='Welcome %(username)s! Click on the link %(link)s to verify your email',
         verify_email_subject='Email verification',
         username_sent='Your username was emailed to you',
         new_password_sent='A new password was emailed to you',
@@ -1025,7 +1033,7 @@ class Auth(object):
 
     Authentication Example:
 
-        from contrib.utils import *
+        from gluon.contrib.utils import *
         mail=Mail()
         mail.settings.server='smtp.gmail.com:587'
         mail.settings.sender='you@somewhere.com'
@@ -1116,11 +1124,12 @@ class Auth(object):
                    f=f, args=args, vars=vars, scheme=scheme)
 
     def here(self):
-        return current.request.env.request_uri
+        return URL(args=current.request.args,vars=current.request.vars)
 
     def __init__(self, environment=None, db=None, mailer=True,
                  hmac_key=None, controller='default', function='user',
-                 cas_provider=None, signature=True, secure=False):
+                 cas_provider=None, signature=True, secure=False,
+                 csrf_prevention=True):
         """
         auth=Auth(db)
 
@@ -1136,6 +1145,7 @@ class Auth(object):
             db = environment
         self.db = db
         self.environment = current
+        self.csrf_prevention = csrf_prevention
         request = current.request
         session = current.session
         auth = session.auth
@@ -1304,44 +1314,56 @@ class Auth(object):
         else:
             raise HTTP(404)
 
-    def navbar(self, mode='Default', action=None, prefix='Welcome', referrer_actions=DEFAULT, user_identifier=DEFAULT):
-        """Navbar with support for more templates
+    def navbar(self, prefix='Welcome', action=None,
+               separators=(' [ ', ' | ', ' ] '), user_identifier=DEFAULT,
+               referrer_actions=DEFAULT, mode='default'):
+        """ Navbar with support for more templates
         This uses some code from the old navbar.
 
         Keyword arguments:
         mode -- see options for list of
 
         """
-        items = [] #Hold all menu items in a list
-        self.bar = '' #The final 
+        items = []  # Hold all menu items in a list
+        self.bar = ''  # The final
         T = current.T
         referrer_actions = [] if not referrer_actions else referrer_actions
         if not action:
             action = self.url(self.settings.function)
-        
+
         request = current.request
         if URL() == action:
             next = ''
         else:
             next = '?_next=' + urllib.quote(URL(args=request.args,
                                                 vars=request.get_vars))
-        href = lambda function: '%s/%s%s' % (action, function,
-                                             next if referrer_actions is DEFAULT or function in referrer_actions else '')
+        href = lambda function: '%s/%s%s' % (action, function, next
+                                             if referrer_actions is DEFAULT
+                                             or function in referrer_actions
+                                             else '')
         if isinstance(prefix, str):
             prefix = T(prefix)
         if prefix:
             prefix = prefix.strip() + ' '
 
-        def Anr(*a,**b):
-            b['_rel']='nofollow'
-            return A(*a,**b)
-        
-        if self.user_id: #User is logged in
-            items.append({'name': T('Logout'), 'href': '%s/logout?_next=%s' % (action, urllib.quote(self.settings.logout_next)), 'icon': 'icon-off'})
+        def Anr(*a, **b):
+            b['_rel'] = 'nofollow'
+            return A(*a, **b)
+
+        if self.user_id:  # User is logged in
+            logout_next = self.settings.logout_next
+            items.append({'name': T('Logout'),
+                          'href': '%s/logout?_next=%s' % (action,
+                                                          urllib.quote(
+                                                          logout_next)),
+                          'icon': 'icon-off'})
             if not 'profile' in self.settings.actions_disabled:
-                items.append({'name': T('Profile'), 'href': href('profile'), 'icon': 'icon-user'})
+                items.append({'name': T('Profile'), 'href': href('profile'),
+                              'icon': 'icon-user'})
             if not 'change_password' in self.settings.actions_disabled:
-                items.append({'name': T('Password'), 'href': href('change_password'), 'icon': 'icon-lock'})
+                items.append({'name': T('Password'),
+                              'href': href('change_password'),
+                              'icon': 'icon-lock'})
 
             if user_identifier is DEFAULT:
                 user_identifier = '%(first_name)s'
@@ -1353,45 +1375,147 @@ class Auth(object):
                 user_identifier = user_identifier % self.user
             if not user_identifier:
                 user_identifier = ''
-        else: #User is not logged in
-            items.append({'name': T('Login'), 'href': href('login'), 'icon': 'icon-off'})
+        else:  # User is not logged in
+            items.append({'name': T('Login'), 'href': href('login'),
+                          'icon': 'icon-off'})
             if not 'register' in self.settings.actions_disabled:
-                items.append({'name': T('Register'), 'href': href('register'), 'icon': 'icon-user'})
+                items.append({'name': T('Register'), 'href': href('register'),
+                              'icon': 'icon-user'})
             if not 'request_reset_password' in self.settings.actions_disabled:
-                items.append({'name': T('Lost password?'), 'href': href('request_reset_password'), 'icon': 'icon-lock'})
-            if self.settings.use_username and not 'retrieve_username' in self.settings.actions_disabled:
-                items.append({'name': T('Forgot username?'), 'href': href('retrieve_username'), 'icon': 'icon-edit'})
-        
-        def menu(): #For inclusion in MENU
+                items.append({'name': T('Lost password?'),
+                              'href': href('request_reset_password'),
+                              'icon': 'icon-lock'})
+            if (self.settings.use_username and not
+                    'retrieve_username' in self.settings.actions_disabled):
+                items.append({'name': T('Forgot username?'),
+                             'href': href('retrieve_username'),
+                             'icon': 'icon-edit'})
+
+        def menu():  # For inclusion in MENU
             self.bar = [(items[0]['name'], False, items[0]['href'], [])]
             del items[0]
             for item in items:
                 self.bar[0][3].append((item['name'], False, item['href']))
 
-        def bootstrap(): #Default web2py scaffolding
-            self.bar = UL(LI(Anr(I(_class=items[0]['icon']), ' ' + items[0]['name'], _href=items[0]['href'])), _class='dropdown-menu')
+        def bootstrap():  # Default web2py scaffolding
+            self.bar = UL(LI(Anr(I(_class=items[0]['icon']),
+                                 ' ' + items[0]['name'],
+                                 _href=items[0]['href'])),
+                          _class='dropdown-menu')
             del items[0]
             for item in items:
-                self.bar.insert(-1, LI(Anr(I(_class=item['icon']), ' ' + item['name'], _href=item['href'])))
+                self.bar.insert(-1, LI(Anr(I(_class=item['icon']),
+                                           ' ' + item['name'],
+                                           _href=item['href'])))
             self.bar.insert(-1, LI('', _class='divider'))
             if self.user_id:
-                self.bar = LI(Anr(prefix, user_identifier, _href='#'), self.bar, _class='dropdown')
+                self.bar = LI(Anr(prefix, user_identifier, _href='#'),
+                              self.bar,
+                              _class='dropdown')
             else:
-                self.bar = LI(Anr(T('Login'), _href='#'), self.bar, _class='dropdown')
+                self.bar = LI(Anr(T('Login'), _href='#'), self.bar,
+                              _class='dropdown')
 
-        options = {'asmenu' : menu,
-            'dropdown' : bootstrap
-        } #Define custom modes.
-        try:
+        def bare():
+            """ In order to do advanced customization we only need the
+            prefix, the user_identifier and the href attribute of items
+
+            Example:
+
+            # in module custom_layout.py
+            from gluon import *
+            def navbar(auth_navbar):
+                bar = auth_navbar
+                user = bar["user"]
+
+                if not user:
+                    btn_login = A(current.T("Login"),
+                                  _href=bar["login"],
+                                  _class="btn btn-success",
+                                  _rel="nofollow")
+                    btn_register = A(current.T("Sign up"),
+                                     _href=bar["register"],
+                                     _class="btn btn-primary",
+                                     _rel="nofollow")
+                    return DIV(btn_register, btn_login, _class="btn-group")
+                else:
+                    toggletext = "%s back %s" % (bar["prefix"], user)
+                    toggle = A(toggletext,
+                               _href="#",
+                               _class="dropdown-toggle",
+                               _rel="nofollow",
+                               **{"_data-toggle": "dropdown"})
+                    li_profile = LI(A(I(_class="icon-user"), ' ',
+                                      current.T("Account details"),
+                                      _href=bar["profile"], _rel="nofollow"))
+                    li_custom = LI(A(I(_class="icon-book"), ' ',
+                                     current.T("My Agenda"),
+                                     _href="#", rel="nofollow"))
+                    li_logout = LI(A(I(_class="icon-off"), ' ',
+                                     current.T("logout"),
+                                     _href=bar["logout"], _rel="nofollow"))
+                    dropdown = UL(li_profile,
+                                  li_custom,
+                                  LI('', _class="divider"),
+                                  li_logout,
+                                  _class="dropdown-menu", _role="menu")
+
+                    return LI(toggle, dropdown, _class="dropdown")
+
+            # in models db.py
+            import custom_layout as custom
+
+            # in layout.html
+            <ul id="navbar" class="nav pull-right">
+                {{='auth' in globals() and \
+                  custom.navbar(auth.navbar(mode='bare')) or ''}}</ul>
+
+            """
+            bare = {}
+
+            bare['prefix'] = prefix
+            bare['user'] = user_identifier if self.user_id else None
+
+            for i in items:
+                if i['name'] == T('Login'):
+                    k = 'login'
+                elif i['name'] == T('Register'):
+                    k = 'register'
+                elif i['name'] == T('Lost password?'):
+                    k = 'request_reset_password'
+                elif i['name'] == T('Forgot username?'):
+                    k = 'retrieve_username'
+                elif i['name'] == T('Logout'):
+                    k = 'logout'
+                elif i['name'] == T('Profile'):
+                    k = 'profile'
+                elif i['name'] == T('Password'):
+                    k = 'change_password'
+
+                bare[k] = i['href']
+
+            self.bar = bare
+
+        options = {'asmenu': menu,
+                   'dropdown': bootstrap,
+                   'bare': bare
+                   }  # Define custom modes.
+
+        if mode in options and callable(options[mode]):
             options[mode]()
-        except KeyError: #KeyError if mode is not in options (do Default)
+        else:
+            s1, s2, s3 = separators
             if self.user_id:
-                self.bar = SPAN(prefix, user_identifier, '[', Anr(items[0]['name'], _href=items[0]['href']), ']', _class='auth_navbar')
+                self.bar = SPAN(prefix, user_identifier, s1,
+                                Anr(items[0]['name'],
+                                _href=items[0]['href']), s3,
+                                _class='auth_navbar')
             else:
-                self.bar = SPAN('[', Anr(items[0]['name'], _href=items[0]['href']), ']', _class='auth_navbar')
-            del items[0]
-            for item in items:
-                self.bar.insert(-1, ']')
+                self.bar = SPAN(s1, Anr(items[0]['name'],
+                                _href=items[0]['href']), s3,
+                                _class='auth_navbar')
+            for item in items[1:]:
+                self.bar.insert(-1, s2)
                 self.bar.insert(-1, Anr(item['name'], _href=item['href']))
 
         return self.bar
@@ -1409,7 +1533,8 @@ class Auth(object):
                                  tables,
                                  archive_db=None,
                                  archive_names='%(tablename)s_archive',
-                                 current_record='current_record'):
+                                 current_record='current_record',
+                                 current_record_label=None):
         """
         to enable full record versioning (including auth tables):
 
@@ -1436,13 +1561,18 @@ class Auth(object):
         does automatically.
 
         """
-        tables = [table for table in tables]
+        current_record_label = current_record_label or current.T(
+            current_record.replace('_',' ').title())
         for table in tables:
-            if '_id' in table.fields() and 'modified_on' in table.fields() and not current_record in table.fields():
+            fieldnames = table.fields()
+            if ('id' in fieldnames and
+                'modified_on' in fieldnames and
+                not current_record in fieldnames):
                 table._enable_record_versioning(
                     archive_db=archive_db,
                     archive_name=archive_names,
-                    current_record=current_record)
+                    current_record=current_record,
+                    current_record_label=current_record_label)
 
     def define_signature(self):
         db = self.db
@@ -1526,7 +1656,8 @@ class Auth(object):
                            min_length=settings.password_min_length)
         is_unique_email = [
             IS_EMAIL(error_message=self.messages.invalid_email),
-            IS_NOT_IN_DB(db, '%s.email' % settings.table_user_name)]
+            IS_NOT_IN_DB(db, '%s.email' % settings.table_user_name,
+                         error_message=self.messages.email_taken)]
         if not settings.email_case_sensitive:
             is_unique_email.insert(1, IS_LOWER())
         if not settings.table_user_name in db.tables:
@@ -1535,8 +1666,10 @@ class Auth(object):
                 settings.table_user_name, []) + signature_list
             if username or settings.cas_provider:
                 is_unique_username = \
-                    [IS_MATCH('[\w\.\-]+', strict=True),
-                     IS_NOT_IN_DB(db, '%s.username' % settings.table_user_name)]
+                    [IS_MATCH('[\w\.\-]+', strict=True,
+                              error_message=self.messages.invalid_username),
+                     IS_NOT_IN_DB(db, '%s.username' % settings.table_user_name,
+                                  error_message=self.messages.username_taken)]
                 if not settings.username_case_sensitive:
                     is_unique_username.insert(1, IS_LOWER())
                 db.define_table(
@@ -1789,7 +1922,6 @@ class Auth(object):
                 keys['first_name'] = keys.get('username', guess)
             user_id = table_user.insert(**table_user._filter_fields(keys))
             user = table_user[user_id]
-            print user
             if self.settings.create_user_groups:
                 group_id = self.add_group(
                     self.settings.create_user_groups % user)
@@ -1846,14 +1978,15 @@ class Auth(object):
         """
         from gluon.settings import global_settings
         if global_settings.web2py_runtime_gae:
-            user = Row(self.settings.table_user._filter_fields(user, id=True))
+            user = Row(self.table_user()._filter_fields(user, id=True))
             delattr(user,'password')
         else:
             user = Row(user)
             for key, value in user.items():
                 if callable(value) or key=='password':
                     delattr(user,key)
-        current.session.renew(clear_session=not self.settings.keep_session_onlogin)
+        if self.settings.renew_session_onlogin:
+            current.session.renew(clear_session=not self.settings.keep_session_onlogin)
         current.session.auth = Storage(
             user = user,
             last_visit=current.request.now,
@@ -2037,31 +2170,28 @@ class Auth(object):
         """
 
         table_user = self.table_user()
-        if self.settings.login_userfield:
-            username = self.settings.login_userfield
-        elif 'username' in table_user.fields:
-            username = 'username'
-        else:
-            username = 'email'
+        settings = self.settings
         if 'username' in table_user.fields or \
-                not self.settings.login_email_validate:
+                not settings.login_email_validate:
             tmpvalidator = IS_NOT_EMPTY(error_message=self.messages.is_empty)
+            if not settings.username_case_sensitive:
+                tmpvalidator = [IS_LOWER(), tmpvalidator]
         else:
             tmpvalidator = IS_EMAIL(error_message=self.messages.invalid_email)
-        old_requires = table_user[username].requires
-        table_user[username].requires = tmpvalidator
+            if not settings.email_case_sensitive:
+                tmpvalidator = [IS_LOWER(), tmpvalidator]
 
         request = current.request
         response = current.response
         session = current.session
 
-        passfield = self.settings.password_field
+        passfield = settings.password_field
         try:
             table_user[passfield].requires[-1].min_length = 0
         except:
             pass
 
-        ### use session for federated login        
+        ### use session for federated login
         snext = self.get_vars_next()
         if snext:
             session._auth_next = snext
@@ -2071,43 +2201,58 @@ class Auth(object):
 
         if next is DEFAULT:
             # important for security
-            next = self.settings.login_next
+            next = settings.login_next
             user_next = snext
             if user_next:
                 external = user_next.split('://')
                 if external[0].lower() in ['http', 'https', 'ftp']:
                     host_next = user_next.split('//', 1)[-1].split('/')[0]
-                    if host_next in self.settings.cas_domains:
+                    if host_next in settings.cas_domains:
                         next = user_next
                 else:
                     next = user_next
         if onvalidation is DEFAULT:
-            onvalidation = self.settings.login_onvalidation
+            onvalidation = settings.login_onvalidation
         if onaccept is DEFAULT:
-            onaccept = self.settings.login_onaccept
+            onaccept = settings.login_onaccept
         if log is DEFAULT:
             log = self.messages['login_log']
 
-        onfail = self.settings.login_onfail
+        onfail = settings.login_onfail
 
         user = None  # default
 
+
+        #Setup the default field used for the form
+        multi_login = False
+        if self.settings.login_userfield:
+            username = self.settings.login_userfield
+        else:
+            if 'username' in table_user.fields:
+                username = 'username'
+            else:
+                username = 'email'
+            if self.settings.multi_login:
+                multi_login = True
+        old_requires = table_user[username].requires
+        table_user[username].requires = tmpvalidator
+
         # do we use our own login form, or from a central source?
-        if self.settings.login_form == self:
+        if settings.login_form == self:
             form = SQLFORM(
                 table_user,
                 fields=[username, passfield],
                 hidden=dict(_next=next),
-                showid=self.settings.showid,
+                showid=settings.showid,
                 submit_button=self.messages.login_button,
                 delete_label=self.messages.delete_label,
-                formstyle=self.settings.formstyle,
-                separator=self.settings.label_separator
+                formstyle=settings.formstyle,
+                separator=settings.label_separator
             )
 
-            if self.settings.remember_me_form:
+            if settings.remember_me_form:
                 ## adds a new input checkbox "remember me for longer"
-                if self.settings.formstyle != 'bootstrap':
+                if settings.formstyle != 'bootstrap':
                     addrow(form, XML("&nbsp;"),
                            DIV(XML("&nbsp;"),
                                INPUT(_type='checkbox',
@@ -2120,9 +2265,9 @@ class Auth(object):
                                self.messages.label_remember_me,
                                _for="auth_user_remember",
                                )), "",
-                           self.settings.formstyle,
+                           settings.formstyle,
                            'auth_user_remember__row')
-                elif self.settings.formstyle == 'bootstrap':
+                elif settings.formstyle == 'bootstrap':
                     addrow(form,
                            "",
                            LABEL(
@@ -2132,24 +2277,29 @@ class Auth(object):
                                self.messages.label_remember_me,
                                _class="checkbox"),
                            "",
-                           self.settings.formstyle,
+                           settings.formstyle,
                            'auth_user_remember__row')
 
-            captcha = self.settings.login_captcha or \
-                (self.settings.login_captcha != False and self.settings.captcha)
+            captcha = settings.login_captcha or \
+                (settings.login_captcha != False and settings.captcha)
             if captcha:
                 addrow(form, captcha.label, captcha, captcha.comment,
-                       self.settings.formstyle, 'captcha__row')
+                       settings.formstyle, 'captcha__row')
             accepted_form = False
 
-            if form.accepts(request, session,
+            if form.accepts(request, session if self.csrf_prevention else None,
                             formname='login', dbio=False,
                             onvalidation=onvalidation,
-                            hideerror=self.settings.hideerror):
+                            hideerror=settings.hideerror):
 
                 accepted_form = True
                 # check for username in db
-                user = table_user(**{username: form.vars[username]})
+                entered_username = form.vars[username]
+                if multi_login and '@' in entered_username:
+                    # if '@' in username check for email, not username
+                    user = table_user(email = entered_username)
+                else:
+                    user = table_user(**{username: entered_username})
                 if user:
                     # user in db, check if registration pending or disabled
                     temp_user = user
@@ -2167,36 +2317,36 @@ class Auth(object):
                     # try alternate logins 1st as these have the
                     # current version of the password
                     user = None
-                    for login_method in self.settings.login_methods:
+                    for login_method in settings.login_methods:
                         if login_method != self and \
                                 login_method(request.vars[username],
                                              request.vars[passfield]):
-                            if not self in self.settings.login_methods:
+                            if not self in settings.login_methods:
                                 # do not store password in db
                                 form.vars[passfield] = None
                             user = self.get_or_create_user(
-                                form.vars, self.settings.update_fields)
+                                form.vars, settings.update_fields)
                             break
                     if not user:
                         # alternates have failed, maybe because service inaccessible
-                        if self.settings.login_methods[0] == self:
+                        if settings.login_methods[0] == self:
                             # try logging in locally using cached credentials
                             if form.vars.get(passfield, '') == temp_user[passfield]:
                                 # success
                                 user = temp_user
                 else:
                     # user not in db
-                    if not self.settings.alternate_requires_registration:
+                    if not settings.alternate_requires_registration:
                         # we're allowed to auto-register users from external systems
-                        for login_method in self.settings.login_methods:
+                        for login_method in settings.login_methods:
                             if login_method != self and \
                                     login_method(request.vars[username],
                                                  request.vars[passfield]):
-                                if not self in self.settings.login_methods:
+                                if not self in settings.login_methods:
                                     # do not store password in db
                                     form.vars[passfield] = None
                                 user = self.get_or_create_user(
-                                    form.vars, self.settings.update_fields)
+                                    form.vars, settings.update_fields)
                                 break
                 if not user:
                     self.log_event(self.messages['login_failed_log'],
@@ -2206,25 +2356,25 @@ class Auth(object):
                     callback(onfail, None)
                     redirect(
                         self.url(args=request.args, vars=request.get_vars),
-                        client_side=self.settings.client_side)
+                        client_side=settings.client_side)
 
         else:
             # use a central authentication server
-            cas = self.settings.login_form
+            cas = settings.login_form
             cas_user = cas.get_user()
 
             if cas_user:
                 cas_user[passfield] = None
                 user = self.get_or_create_user(
                     table_user._filter_fields(cas_user),
-                    self.settings.update_fields)
+                    settings.update_fields)
             elif hasattr(cas, 'login_form'):
                 return cas.login_form()
             else:
                 # we need to pass through login again before going on
-                next = self.url(self.settings.function, args='login')
+                next = self.url(settings.function, args='login')
                 redirect(cas.login_url(next),
-                         client_side=self.settings.client_side)
+                         client_side=settings.client_side)
 
         # process authenticated users
         if user:
@@ -2234,20 +2384,20 @@ class Auth(object):
             self.login_user(user)
             session.auth.expiration = \
                 request.vars.get('remember', False) and \
-                self.settings.long_expiration or \
-                self.settings.expiration
+                settings.long_expiration or \
+                settings.expiration
             session.auth.remember = 'remember' in request.vars
             self.log_event(log, user)
             session.flash = self.messages.logged_in
 
         # how to continue
-        if self.settings.login_form == self:
+        if settings.login_form == self:
             if accepted_form:
                 callback(onaccept, form)
                 if next == session._auth_next:
                     session._auth_next = None
                 next = replace_id(next, form)
-                redirect(next, client_side=self.settings.client_side)
+                redirect(next, client_side=settings.client_side)
 
             table_user[username].requires = old_requires
             return form
@@ -2256,7 +2406,7 @@ class Auth(object):
 
         if next == session._auth_next:
             del session._auth_next
-        redirect(next, client_side=self.settings.client_side)
+        redirect(next, client_side=settings.client_side)
 
     def logout(self, next=DEFAULT, onlogout=DEFAULT, log=DEFAULT):
         """
@@ -2268,7 +2418,7 @@ class Auth(object):
         """
 
         if next is DEFAULT:
-            next = self.settings.logout_next
+            next = self.get_vars_next() or self.settings.logout_next
         if onlogout is DEFAULT:
             onlogout = self.settings.logout_onlogout
         if onlogout:
@@ -2284,8 +2434,9 @@ class Auth(object):
                 next = cas.logout_url(next)
 
         current.session.auth = None
+        if self.settings.renew_session_onlogout:
+            current.session.renew(clear_session=not self.settings.keep_session_onlogout)
         current.session.flash = self.messages.logged_out
-        current.session.renew(clear_session=not self.settings.keep_session_onlogout)
         if not next is None:
             redirect(next)
 
@@ -2360,6 +2511,7 @@ class Auth(object):
                 if item:
                     form.custom.widget.password_two = \
                         INPUT(_name="password_two", _type="password",
+                              _class="password",
                               requires=IS_EXPR(
                               'value==%s' %
                               repr(request.vars.get(passfield, None)),
@@ -2383,9 +2535,17 @@ class Auth(object):
             addrow(form, captcha.label, captcha,
                    captcha.comment, self.settings.formstyle, 'captcha__row')
 
+        #Add a message if specified
+        if self.settings.pre_registration_div:
+            addrow(form, '',
+                   DIV(_id="pre-reg", *self.settings.pre_registration_div),
+                   '', formstyle, '')
+
         table_user.registration_key.default = key = web2py_uuid()
-        if form.accepts(request, session, formname='register',
-                        onvalidation=onvalidation, hideerror=self.settings.hideerror):
+        if form.accepts(request, session if self.csrf_prevention else None,
+                        formname='register',
+                        onvalidation=onvalidation,
+                        hideerror=self.settings.hideerror):
             description = self.messages.group_description % form.vars
             if self.settings.create_user_groups:
                 group_id = self.add_group(
@@ -2403,7 +2563,8 @@ class Auth(object):
                     to=form.vars.email,
                     subject=self.messages.verify_email_subject,
                     message=self.messages.verify_email
-                        % dict(key=key, link=link)):
+                        % dict(key=key, link=link,
+                               username=form.vars[username])):
                     self.db.rollback()
                     response.flash = self.messages.unable_send_email
                     return form
@@ -2528,7 +2689,7 @@ class Auth(object):
             addrow(form, captcha.label, captcha,
                    captcha.comment, self.settings.formstyle, 'captcha__row')
 
-        if form.accepts(request, session,
+        if form.accepts(request, session if self.csrf_prevention else None,
                         formname='retrieve_username', dbio=False,
                         onvalidation=onvalidation, hideerror=self.settings.hideerror):
             user = table_user(email=form.vars.email)
@@ -2606,7 +2767,7 @@ class Auth(object):
                        formstyle=self.settings.formstyle,
                        separator=self.settings.label_separator
                        )
-        if form.accepts(request, session,
+        if form.accepts(request, session if self.csrf_prevention else None,
                         formname='retrieve_password', dbio=False,
                         onvalidation=onvalidation, hideerror=self.settings.hideerror):
             user = table_user(email=form.vars.email)
@@ -2751,7 +2912,7 @@ class Auth(object):
         if captcha:
             addrow(form, captcha.label, captcha,
                    captcha.comment, self.settings.formstyle, 'captcha__row')
-        if form.accepts(request, session,
+        if form.accepts(request, session if self.csrf_prevention else None,
                         formname='reset_password', dbio=False,
                         onvalidation=onvalidation,
                         hideerror=self.settings.hideerror):
@@ -2934,6 +3095,15 @@ class Auth(object):
             redirect(next, client_side=self.settings.client_side)
         return form
 
+    def run_login_onaccept(self):
+         onaccept = self.settings.login_onaccept
+         if onaccept:
+             form = Storage(dict(vars=self.user))
+             if not isinstance(onaccept,(list, tuple)):
+                 onaccept = [onaccept]
+             for callback in onaccept:
+                 callback(form)
+
     def is_impersonating(self):
         return self.is_logged_in() and 'impersonator' in current.session.auth
 
@@ -2957,7 +3127,7 @@ class Auth(object):
             user_id = current.request.post_vars.user_id
         if user_id and user_id != self.user.id and user_id != '0':
             if not self.has_permission('impersonate',
-                                       self.settings.table_user_name,
+                                       self.table_user(),
                                        user_id):
                 raise HTTP(403, "Forbidden")
             user = table_user(user_id)
@@ -2967,22 +3137,17 @@ class Auth(object):
             auth.user.update(
                 table_user._filter_fields(user, True))
             self.user = auth.user
-            self.update_groups()
-            onaccept = self.settings.login_onaccept
+            self.update_groups()            
             log = self.messages['impersonate_log']
             self.log_event(log, dict(id=current_id, other_id=auth.user.id))
-            if onaccept:
-                form = Storage(dict(vars=self.user))
-                if not isinstance(onaccept,(list, tuple)):
-                    onaccept = [onaccept]
-                for callback in onaccept:
-                    callback(form)
+            self.run_login_onaccept()
         elif user_id in (0, '0'):
             if self.is_impersonating():
                 session.clear()
                 session.update(cPickle.loads(auth.impersonator))
                 self.user = session.auth.user
                 self.update_groups()
+                self.run_login_onaccept()
             return None
         if requested_id is DEFAULT and not request.post_vars:
             return SQLFORM.factory(Field('user_id', 'integer'))
@@ -3015,7 +3180,7 @@ class Auth(object):
             table_membership.user_id == self.user.id).select()
         table = TABLE()
         for membership in memberships:
-            table_group = self.db[self.settings.table_group_name]
+            table_group = self.table_group()
             groups = self.db(table_group.id == membership.group_id).select()
             if groups:
                 group = groups[0]
@@ -3469,7 +3634,9 @@ class Auth(object):
              templates=None,
              migrate=True,
              controller=None,
-             function=None):
+             function=None,
+             force_render=False,
+             groups=None):
 
         if controller and function: resolve = False
 
@@ -3483,7 +3650,8 @@ class Auth(object):
                               templates=templates,
                               migrate=migrate,
                               controller=controller,
-                              function=function)
+                              function=function,
+                              groups=groups)
         else:
             self._wiki.env.update(env or {})
 
@@ -3493,7 +3661,7 @@ class Auth(object):
         if resolve:
             action = str(current.request.args(0)).startswith("_")
             if slug and not action:
-                wiki = self._wiki.read(slug)
+                wiki = self._wiki.read(slug,force_render)
                 if isinstance(wiki, dict) and wiki.has_key('content'):
                     # We don't want to return a dict object, just the wiki
                     wiki = wiki['content']
@@ -4510,13 +4678,12 @@ class Service(object):
 
         def return_error(id, code, message=None, data=None):
             error = {'code': code}
-            if message is None:
-                error['message'] =  Service.jsonrpc_errors[code][0]
-            else:
-                error['message'] = message
-            if data is None:
+            if Service.jsonrpc_errors.has_key(code):
+                error['message'] = Service.jsonrpc_errors[code][0]
                 error['data'] = Service.jsonrpc_errors[code][1]
-            else:
+            if message is not None:
+                error['message'] = message
+            if data is not None:
                 error['data'] = data
             return serializers.json({'jsonrpc': '2.0',
                                      'id': id,
@@ -4639,7 +4806,7 @@ class Service(object):
 
     def serve_soap(self, version="1.1"):
         try:
-            from contrib.pysimplesoap.server import SoapDispatcher
+            from gluon.contrib.pysimplesoap.server import SoapDispatcher
         except:
             return "pysimplesoap not installed in contrib"
         request = current.request
@@ -5074,24 +5241,53 @@ class Wiki(object):
         controller, function, args = items[0], items[1], items[2:]
         return LOAD(controller, function, args=args, ajax=True).xml()
 
-    def get_render(self):
+    def get_renderer(self):
         if isinstance(self.settings.render, basestring):
             r = getattr(self, "%s_render" % self.settings.render)
         elif callable(self.settings.render):
             r = self.settings.render
+        elif isinstance(self.settings.render, dict):
+            def custom_render(page):
+                if page.render:
+                    if page.render in self.settings.render.keys():
+                        my_render = self.settings.render[page.render]
+                    else:
+                        my_render = getattr(self, "%s_render" % page.render)
+                else:
+                    my_render = self.markmin_render
+                return my_render(page)
+            r = custom_render
         else:
-            raise ValueError("Invalid render type %s" % type(render))
+            raise ValueError(
+                "Invalid render type %s" % type(self.settings.render))
         return r
 
     def __init__(self, auth, env=None, render='markmin',
                  manage_permissions=False, force_prefix='',
                  restrict_search=False, extra=None,
                  menu_groups=None, templates=None, migrate=True,
-                 controller=None, function=None):
+                 controller=None, function=None, groups=None):
 
         settings = self.settings = auth.settings.wiki
 
-        # render: "markmin", "html", ..., <function>
+        """render argument options:
+                - "markmin"
+                - "html"
+                - <function>
+                    Sets a custom render function
+                - dict(html=<function>, markmin=...):
+                    dict(...) allows multiple custom render functions
+                - "multiple"
+                    Is the same as {}. It enables per-record formats
+                    using builtins
+        """
+        engines = set(['markmin', 'html'])
+        show_engine = False
+        if render == "multiple":
+            render = {}
+        if isinstance(render, dict):
+            [engines.add(key) for key in render]
+            show_engine = True
         settings.render = render
         perms = settings.manage_permissions = manage_permissions
 
@@ -5102,7 +5298,9 @@ class Wiki(object):
         settings.templates = templates
         settings.controller = controller
         settings.function = function
-
+        settings.groups = auth.user_groups.values() \
+            if groups is None else groups
+        
         db = auth.db
         self.env = env or {}
         self.env['component'] = Wiki.component
@@ -5135,8 +5333,13 @@ class Wiki(object):
                               default=[Wiki.everybody]),
                         Field('changelog'),
                         Field('html', 'text',
-                              compute=self.get_render(),
+                              compute=self.get_renderer(),
                               readable=False, writable=False),
+                        Field('render', default="markmin",
+                              readable=show_engine,
+                              writable=show_engine,
+                              requires=IS_EMPTY_OR(
+                                  IS_IN_SET(engines))),
                         auth.signature],
                     'vars':{'format':'%(title)s', 'migrate':migrate}}),
             ('wiki_tag', {
@@ -5191,7 +5394,8 @@ class Wiki(object):
 
         if (auth.user and
             check_credentials(current.request, gae_login=False) and
-            not 'wiki_editor' in auth.user_groups.values()):
+            not 'wiki_editor' in auth.user_groups.values() and
+            self.settings.groups is None):
             group = db.auth_group(role='wiki_editor')
             gid = group.id if group else db.auth_group.insert(
                 role='wiki_editor')
@@ -5209,7 +5413,7 @@ class Wiki(object):
             self.settings.manage_permissions:
             return True
         elif self.auth.user:
-            groups = self.auth.user_groups.values()
+            groups = self.settings.groups
             if ('wiki_editor' in groups or
                 set(groups).intersection(set(page.can_read + page.can_edit)) or
                 page.created_by == self.auth.user.id):
@@ -5219,7 +5423,7 @@ class Wiki(object):
     def can_edit(self, page=None):
         if not self.auth.user:
             redirect(self.auth.settings.login_url)
-        groups = self.auth.user_groups.values()
+        groups = self.settings.groups
         return ('wiki_editor' in groups or
                 (page is None and 'wiki_author' in groups) or
                 not page is None and (
@@ -5229,7 +5433,7 @@ class Wiki(object):
     def can_manage(self):
         if not self.auth.user:
             return False
-        groups = self.auth.user_groups.values()
+        groups = self.settings.groups
         return 'wiki_editor' in groups
 
     def can_search(self):
@@ -5240,7 +5444,7 @@ class Wiki(object):
             if self.settings.menu_groups is None:
                 return True
             else:
-                groups = self.auth.user_groups.values()
+                groups = self.settings.groups
                 if any(t in self.settings.menu_groups for t in groups):
                     return True
         return False
@@ -5249,7 +5453,9 @@ class Wiki(object):
 
     def automenu(self):
         """adds the menu if not present"""
-        if not self.wiki_menu_items and self.settings.controller and self.settings.function:
+        if (not self.wiki_menu_items and 
+            self.settings.controller and 
+            self.settings.function):
             self.wiki_menu_items = self.menu(self.settings.controller,
                                              self.settings.function)
             current.response.menu += self.wiki_menu_items
@@ -5288,7 +5494,7 @@ class Wiki(object):
         elif zero == '_cloud':
             return self.cloud()
         elif zero == '_preview':
-            return self.preview(self.get_render())
+            return self.preview(self.get_renderer())
 
     def first_paragraph(self, page):
         if not self.can_read(page):
@@ -5302,7 +5508,7 @@ class Wiki(object):
     def fix_hostname(self, body):
         return (body or '').replace('://HOSTNAME', '://%s' % self.host)
 
-    def read(self, slug):
+    def read(self, slug, force_render=False):
         if slug in '_cloud':
             return self.cloud()
         elif slug in '_search':
@@ -5317,10 +5523,12 @@ class Wiki(object):
                 url = URL(args=('_edit', slug))
                 return dict(content=A('Create page "%s"' % slug, _href=url, _class="btn"))
             else:
+                html = page.html if not force_render else self.get_renderer(page)
+                content = XML(self.fix_hostname(html))
                 return dict(title=page.title,
                             slug=page.slug,
                             page=page,
-                            content=XML(self.fix_hostname(page.html)),
+                            content=content,
                             tags=page.tags,
                             created_on=page.created_on,
                             modified_on=page.modified_on)
@@ -5337,17 +5545,6 @@ class Wiki(object):
                             tags=page.tags,
                             created_on=page.created_on,
                             modified_on=page.modified_on)
-
-    def check_editor(self, role='wiki_editor', act=False):
-        if not self.auth.user:
-            if not act:
-                return False
-            redirect(self.auth.settings.login_url)
-        elif not self.auth.has_membership(role):
-            if not act:
-                return False
-            raise HTTP(401, "Not Authorized")
-        return True
 
     def edit(self,slug,from_template=0):
         auth = self.auth
@@ -5409,7 +5606,11 @@ class Wiki(object):
                 if (prevbutton.hasClass('nopreview')) {
                     prevbutton.addClass('preview').removeClass(
                         'nopreview').html('Edit Source');
-                    web2py_ajax_page('post', '%(url)s', {body : jQuery('#wiki_page_body').val()}, 'preview');
+                    try{var wiki_render = jQuery('#wiki_page_render').val()}
+                    catch(e){var wiki_render = null;}
+                    web2py_ajax_page('post', \
+                        '%(url)s', {body: jQuery('#wiki_page_body').val(), \
+                                    render: wiki_render}, 'preview');
                     form.fadeOut('fast', function() {preview.fadeIn()});
                 } else {
                     prevbutton.addClass(
@@ -5514,7 +5715,7 @@ class Wiki(object):
         return dict(content=content)
 
     def media(self, id):
-        request, db = current.request, self.auth.db
+        request, response, db = current.request, current.response, self.auth.db
         media = db.wiki_media(id)
         if media:
             if self.settings.manage_permissions:
@@ -5522,7 +5723,15 @@ class Wiki(object):
                 if not self.can_read(page):
                     return self.not_authorized(page)
             request.args = [media.filename]
-            return current.response.download(request, db)
+            m = response.download(request, db)
+            current.session.forget() # get rid of the cookie
+            response.headers['Last-Modified'] = \
+                request.utcnow.strftime("%a, %d %b %Y %H:%M:%S GMT")
+            if 'Content-Disposition' in response.headers:
+                del response.headers['Content-Disposition']
+            response.headers['Pragma'] = 'cache'
+            response.headers['Cache-Control'] = 'private'
+            return m
         else:
             raise HTTP(404)
 
@@ -5675,8 +5884,43 @@ class Wiki(object):
 
     def preview(self, render):
         request = current.request
+        # FIXME: This is an ugly hack to ensure a default render
+        # engine if not specified (with multiple render engines)
+        if not "render" in request.post_vars:
+            request.post_vars.render = None
         return render(request.post_vars)
 
+class Config(object):
+    def __init__(
+        self,
+                filename,
+        section,
+        default_values={}
+    ):
+        self.config = ConfigParser.ConfigParser(default_values)
+        self.config.read(filename)
+        if not self.config.has_section(section):
+            self.config.add_section(section)
+        self.section  = section
+        self.filename = filename
+
+    def read(self):
+        if not( isinstance(current.session['settings_%s' % self.section], dict) ):
+            settings = dict(self.config.items(self.section))
+        else:
+            settings = current.session['settings_%s' % self.section]
+        return settings
+
+    def save(self, options):
+        for option, value in options:
+            self.config.set(self.section, option, value)
+        try:
+            self.config.write(open(self.filename, 'w'))
+            result = True
+        except:
+            current.session['settings_%s' % self.section] = dict(self.config.items(self.section))
+            result = False
+        return result
 
 if __name__ == '__main__':
     import doctest

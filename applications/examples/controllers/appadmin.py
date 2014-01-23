@@ -50,11 +50,11 @@ if request.function == 'manage':
     auth.requires_membership(manager_role)(lambda: None)()
     menu = False
 elif (request.application == 'admin' and not session.authorized) or \
-        (request.application != 'admin' and not gluon.fileutils.check_credentials(request)):    
+        (request.application != 'admin' and not gluon.fileutils.check_credentials(request)):
     redirect(URL('admin', 'default', 'index',
                  vars=dict(send=URL(args=request.args, vars=request.vars))))
 else:
-    response.subtitle = 'Database Administration (appadmin)'
+    response.subtitle = T('Database Administration (appadmin)')
     menu = True
 
 ignore_rw = True
@@ -186,6 +186,10 @@ def select():
     import re
     db = get_database(request)
     dbname = request.args[0]
+    try:
+        is_imap = db._uri.startswith("imap://")
+    except (KeyError, AttributeError, TypeError):
+        is_imap = False
     regex = re.compile('(?P<table>\w+)\.(?P<field>\w+)=(?P<value>\d+)')
     if len(request.args) > 1 and hasattr(db[request.args[1]], '_primarykey'):
         regex = re.compile('(?P<table>\w+)\.(?P<field>\w+)=(?P<value>.+)')
@@ -203,7 +207,15 @@ def select():
     else:
         start = 0
     nrows = 0
-    stop = start + 100
+
+    step = 100
+    fields = []
+
+    if is_imap:
+        step = 3
+ 
+    stop = start + step
+
     table = None
     rows = []
     orderby = request.vars.orderby
@@ -235,21 +247,27 @@ def select():
         if match:
             table = match.group('table')
         try:
-            nrows = db(query).count()
+            nrows = db(query, ignore_common_filters=True).count()
             if form.vars.update_check and form.vars.update_fields:
-                db(query).update(**eval_in_global_env('dict(%s)'
-                                                      % form.vars.update_fields))
+                db(query, ignore_common_filters=True).update(
+                    **eval_in_global_env('dict(%s)' % form.vars.update_fields))
                 response.flash = T('%s %%{row} updated', nrows)
             elif form.vars.delete_check:
-                db(query).delete()
+                db(query, ignore_common_filters=True).delete()
                 response.flash = T('%s %%{row} deleted', nrows)
-            nrows = db(query).count()
+            nrows = db(query, ignore_common_filters=True).count()
+
+            if is_imap:
+                fields = [db[table][name] for name in
+                    ("id", "uid", "created", "to",
+                     "sender", "subject")]
             if orderby:
-                rows = db(query, ignore_common_filters=True).select(limitby=(
-                    start, stop), orderby=eval_in_global_env(orderby))
+                rows = db(query, ignore_common_filters=True).select(
+                              *fields, limitby=(start, stop),
+                              orderby=eval_in_global_env(orderby))
             else:
                 rows = db(query, ignore_common_filters=True).select(
-                    limitby=(start, stop))
+                    *fields, limitby=(start, stop))
         except Exception, e:
             import traceback
             tb = traceback.format_exc()
@@ -278,11 +296,12 @@ def select():
         table=table,
         start=start,
         stop=stop,
+        step=step,
         nrows=nrows,
         rows=rows,
         query=request.vars.query,
         formcsv=formcsv,
-        tb=tb,
+        tb=tb
     )
 
 
@@ -540,30 +559,30 @@ def table_template(table):
 
 def bg_graph_model():
     graph = pgv.AGraph(layout='dot',  directed=True,  strict=False,  rankdir='LR')
-    
-    subgraphs = dict()    
+
+    subgraphs = dict()
     for tablename in db.tables:
         if hasattr(db[tablename],'_meta_graphmodel'):
             meta_graphmodel = db[tablename]._meta_graphmodel
         else:
             meta_graphmodel = dict(group='Undefined', color='#ECECEC')
-        
-        group = meta_graphmodel['group'].replace(' ', '') 
+
+        group = meta_graphmodel['group'].replace(' ', '')
         if not subgraphs.has_key(group):
             subgraphs[group] = dict(meta=meta_graphmodel, tables=[])
             subgraphs[group]['tables'].append(tablename)
         else:
-            subgraphs[group]['tables'].append(tablename)        
-      
+            subgraphs[group]['tables'].append(tablename)
+
         graph.add_node(tablename, name=tablename, shape='plaintext',
                        label=table_template(tablename))
-    
-    for n, key in enumerate(subgraphs.iterkeys()):        
+
+    for n, key in enumerate(subgraphs.iterkeys()):
         graph.subgraph(nbunch=subgraphs[key]['tables'],
                     name='cluster%d' % n,
                     style='filled',
                     color=subgraphs[key]['meta']['color'],
-                    label=subgraphs[key]['meta']['group'])   
+                    label=subgraphs[key]['meta']['group'])
 
     for tablename in db.tables:
         for field in db[tablename]:
@@ -577,17 +596,17 @@ def bg_graph_model():
                 graph.add_edge(n1, n2, color="#4C4C4C", label='')
 
     graph.layout()
-    #return graph.draw(format='png', prog='dot')
     if not request.args:
+        response.headers['Content-Type'] = 'image/png'
         return graph.draw(format='png', prog='dot')
-    else:       
+    else:
         response.headers['Content-Disposition']='attachment;filename=graph.%s'%request.args(0)
-        if request.args(0) == 'dot':        
+        if request.args(0) == 'dot':
             return graph.string()
         else:
             return graph.draw(format=request.args(0), prog='dot')
 
-def graph_model():    
+def graph_model():
     return dict(databases=databases, pgv=pgv)
 
 def manage():

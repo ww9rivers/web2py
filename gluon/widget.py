@@ -22,12 +22,12 @@ import math
 import logging
 import newcron
 import getpass
-import main
+import gluon.main as main
 
-from fileutils import read_file, write_file, create_welcome_w2p
-from settings import global_settings
-from shell import run, test
-from utils import is_valid_ip_address, is_loopback_ip_address, getipaddrinfo
+from gluon.fileutils import read_file, write_file, create_welcome_w2p
+from gluon.settings import global_settings
+from gluon.shell import run, test
+from gluon.utils import is_valid_ip_address, is_loopback_ip_address, getipaddrinfo
 
 
 ProgramName = 'web2py Web Framework'
@@ -319,8 +319,8 @@ class web2pyDialog(object):
         self.button_stop.configure(state='disabled')
 
         if options.taskbar:
-            import contrib.taskbar_widget
-            self.tb = contrib.taskbar_widget.TaskBarIcon()
+            import gluon.contrib.taskbar_widget
+            self.tb = gluon.contrib.taskbar_widget.TaskBarIcon()
             self.checkTaskBar()
 
             if options.password != '<ask>':
@@ -822,12 +822,6 @@ def console():
                       default=None,
                       help=msg)
 
-    parser.add_option('-W',
-                      '--winservice',
-                      dest='winservice',
-                      default='',
-                      help='-W install|start|stop as Windows service')
-
     msg = 'trigger a cron run manually; usually invoked from a system crontab'
     parser.add_option('-C',
                       '--cron',
@@ -1005,7 +999,7 @@ def console():
         if not os.path.exists('applications/__init__.py'):
             write_file('applications/__init__.py', '')
 
-    return (options, args)
+    return options, args
 
 
 def check_existent_app(options, appname):
@@ -1022,7 +1016,7 @@ def get_code_for_scheduler(app, options):
         code = code % ("','".join(app[1:]))
     app_ = app[0]
     if not check_existent_app(options, app_):
-        print "Application '%s' doesn't exist, skipping" % (app_)
+        print "Application '%s' doesn't exist, skipping" % app_
         return None, None
     return app_, code
 
@@ -1144,23 +1138,6 @@ def start(cron=True):
             pass
         return
 
-    # ## if -W install/start/stop web2py as service
-    if options.winservice:
-        if os.name == 'nt':
-            try:
-                from winservice import register_service_handler, Web2pyService
-                register_service_handler(
-                    argv=['', options.winservice],
-                    opt_file=options.config,
-                    cls=Web2pyService)
-            except ImportError:
-                print 'Error: Missing python module winservice'
-                sys.exit(1)
-        else:
-            print 'Error: Windows services not supported on this platform'
-            sys.exit(1)
-        return
-
     # ## if -H cron is enabled in this *process*
     # ## if --softcron use softcron
     # ## use hardcron in all other cases
@@ -1262,6 +1239,28 @@ end tell
         print 'please visit:'
         print '\t', url
         print 'use "kill -SIGTERM %i" to shutdown the web2py server' % os.getpid()
+
+    # enhance linecache.getline (used by debugger) to look at the source file
+    # if the line was not found (under py2exe & when file was modified)
+    import linecache
+    py2exe_getline = linecache.getline
+    def getline(filename, lineno, *args, **kwargs):
+        line = py2exe_getline(filename, lineno, *args, **kwargs)
+        if not line:
+            try:
+                f = open(filename, "r")
+                try:
+                    for i, line in enumerate(f):
+                        if lineno == i + 1:
+                            break
+                    else:
+                        line = None
+                finally:
+                    f.close()
+            except (IOError, OSError):
+                line = None
+        return line
+    linecache.getline = getline
 
     server = main.HttpServer(ip=ip,
                              port=port,
