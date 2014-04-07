@@ -38,12 +38,8 @@ parameters*.py
 cron.master
 !applications/*
 applications/*.py[oc]
-applications/welcome
-applications/welcome/*
 applications/examples
 applications/examples/*
-applications/admin
-applications/admin/*
 applications/*/databases/*
 applications/*/sessions/*
 applications/*/errors/*

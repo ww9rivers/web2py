@@ -675,15 +675,31 @@ class ConnectionPool(object):
 # metaclass to prepare adapter classes static values
 ###################################################################################
 class AdapterMeta(type):
-    def __new__(cls, clsname, bases, dct):
-        classobj = super(AdapterMeta, cls).__new__(cls, clsname, bases, dct)
-        classobj.REGEX_TABLE_DOT_FIELD = re.compile(r'^' + \
-                                               classobj.QUOTE_TEMPLATE % REGEX_NO_GREEDY_ENTITY_NAME + \
-                                               r'\.' + \
-                                               classobj.QUOTE_TEMPLATE % REGEX_NO_GREEDY_ENTITY_NAME + \
-                                               r'$')
-        return classobj
+    """Metaclass to support manipulation of adapter classes.
 
+    At the moment is used to intercept entity_quoting argument passed to DAL.
+"""
+
+    def __call__(cls, *args, **kwargs):
+        entity_quoting = kwargs.get('entity_quoting', False)
+        if 'entity_quoting' in kwargs:
+             del kwargs['entity_quoting']
+
+        obj = super(AdapterMeta, cls).__call__(*args, **kwargs)
+        if not entity_quoting:
+            quot = obj.QUOTE_TEMPLATE = '%s'
+            regex_ent = r'(\w+)'
+        else:
+            quot = obj.QUOTE_TEMPLATE
+            regex_ent = REGEX_NO_GREEDY_ENTITY_NAME
+        obj.REGEX_TABLE_DOT_FIELD = re.compile(r'^' + \
+                                                    quot % regex_ent + \
+                                                    r'\.' + \
+                                                    quot % regex_ent + \
+                                                    r'$')
+        
+        return obj
+       
 ###################################################################################
 # this is a generic adapter that does nothing; all others are derived from this one
 ###################################################################################
@@ -1342,10 +1358,13 @@ class BaseAdapter(ConnectionPool):
             if hasattr(table,'_on_insert_error'):
                 return table._on_insert_error(table,fields,e)
             raise e
-        if hasattr(table,'_primarykey'):
-            return dict([(k[0].name, k[1]) for k in fields \
-                             if k[0].name in table._primarykey])
+        if hasattr(table, '_primarykey'):
+            mydict = dict([(k[0].name, k[1]) for k in fields if k[0].name in table._primarykey])
+            if mydict != {}:
+                return mydict
         id = self.lastrowid(table)
+        if hasattr(table, '_primarykey') and len(table._primarykey) == 1:
+            id = {table._primarykey[0]: id}
         if not isinstance(id, (int, long)):
             return id
         rid = Reference(id)
@@ -7709,7 +7728,8 @@ class DAL(object):
                  adapter_args=None, attempts=5, auto_import=False,
                  bigint_id=False, debug=False, lazy_tables=False,
                  db_uid=None, do_connect=True,
-                 after_connection=None, tables=None, ignore_field_case=True):
+                 after_connection=None, tables=None, ignore_field_case=True,
+                 entity_quoting=False):
         """
         Creates a new Database Abstraction Layer instance.
 
@@ -7820,7 +7840,8 @@ class DAL(object):
                                       driver_args=driver_args or {},
                                       adapter_args=adapter_args or {},
                                       do_connect=do_connect,
-                                      after_connection=after_connection)
+                                      after_connection=after_connection,
+                                      entity_quoting=entity_quoting)
                         self._adapter = ADAPTERS[self._dbname](**kwargs)
                         types = ADAPTERS[self._dbname].types
                         # copy so multiple DAL() possible
@@ -7847,7 +7868,8 @@ class DAL(object):
         else:
             self._adapter = BaseAdapter(db=self,pool_size=0,
                                         uri='None',folder=folder,
-                                        db_codec=db_codec, after_connection=after_connection)
+                                        db_codec=db_codec, after_connection=after_connection,
+                                        entity_quoting=entity_quoting)
             migrate = fake_migrate = False
         adapter = self._adapter
         self._uri_hash = hashlib_md5(adapter.uri).hexdigest()
@@ -8135,8 +8157,11 @@ def index():
                     break
                 otable = table
                 i += 1
-                if i==len(tags) and table:
-                    ofields = vars.get('order',db[table]._id.name).split('|')
+                if i == len(tags) and table:
+                    if hasattr(db[table], '_id'):
+                        ofields = vars.get('order', db[table]._id.name).split('|')
+                    else:
+                        ofields = vars.get('order', db[table]._primarykey[0]).split('|')
                     try:
                         orderby = [db[table][f] if not f.startswith('~') else ~db[table][f[1:]] for f in ofields]
                     except (KeyError, AttributeError):
@@ -9121,7 +9146,7 @@ class Table(object):
                 new_fields[key] = value
 
         if _key is DEFAULT:
-            record = self(**values)
+            record = self(**fields)
         elif isinstance(_key, dict):
             record = self(**_key)
         else:
@@ -9712,6 +9737,12 @@ class SQLCustomType(object):
         except TypeError:
             return False
 
+    def endswith(self, text=None):
+        try:
+            return self.type.endswith(self, text)
+        except TypeError:
+            return False
+
     def __getslice__(self, a=0, b=100):
         return None
 
@@ -9727,7 +9758,7 @@ class FieldVirtual(object):
         (self.name, self.f) = (name, f) if f else ('unknown', name)
         self.type = ftype
         self.label = label or self.name.capitalize().replace('_',' ')
-        self.represent = lambda v,r:v
+        self.represent = lambda v,r=None:v
         self.formatter = IDENTITY
         self.comment = None
         self.readable = True
@@ -10709,7 +10740,8 @@ class Rows(object):
         if self.colnames!=other.colnames:
             raise Exception('Cannot & incompatible Rows objects')
         records = self.records+other.records
-        return Rows(self.db,records,self.colnames)
+        return Rows(self.db,records,self.colnames,
+                    compact=self.compact or other.compact)
 
     def __or__(self,other):
         if self.colnames!=other.colnames:
@@ -10717,7 +10749,8 @@ class Rows(object):
         records = [record for record in other.records
                    if not record in self.records]
         records = self.records + records
-        return Rows(self.db,records,self.colnames)
+        return Rows(self.db,records,self.colnames,
+                    compact=self.compact or other.compact)
 
     def __nonzero__(self):
         if len(self.records):
@@ -10770,19 +10803,19 @@ class Rows(object):
         filtered by the function f
         """
         if not self:
-            return Rows(self.db, [], self.colnames)
+            return Rows(self.db, [], self.colnames, compact=self.compact)
         records = []
         if limitby:
             a,b = limitby
         else:
             a,b = 0,len(self)
         k = 0
-        for row in self:
+        for i, row in enumerate(self):
             if f(row):
-                if a<=k: records.append(row)
+                if a<=k: records.append(self.records[i])
                 k += 1
                 if k==b: break
-        return Rows(self.db, records, self.colnames)
+        return Rows(self.db, records, self.colnames, compact=self.compact)
 
     def exclude(self, f):
         """
@@ -10790,7 +10823,7 @@ class Rows(object):
         and returns a new Rows object containing the removed elements
         """
         if not self.records:
-            return Rows(self.db, [], self.colnames)
+            return Rows(self.db, [], self.colnames, compact=self.compact)
         removed = []
         i=0
         while i<len(self):
@@ -10800,14 +10833,19 @@ class Rows(object):
                 del self.records[i]
             else:
                 i += 1
-        return Rows(self.db, removed, self.colnames)
+        return Rows(self.db, removed, self.colnames, compact=self.compact)
 
     def sort(self, f, reverse=False):
         """
         returns a list of sorted elements (not sorted in place)
         """
-        rows = Rows(self.db,[],self.colnames,compact=False)
-        rows.records = sorted(self,key=f,reverse=reverse)
+        rows = Rows(self.db, [], self.colnames, compact=self.compact)
+        # When compact=True, iterating over self modifies each record,
+        # so when sorting self, it is necessary to return a sorted
+        # version of self.records rather than the sorted self directly.
+        rows.records = [r for (r, s) in sorted(zip(self.records, self),
+                                               key=lambda r: f(r[1]),
+                                               reverse=reverse)]
         return rows
 
     def group_by_value(self, *fields, **args):

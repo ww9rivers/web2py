@@ -23,6 +23,7 @@ import urllib2
 import Cookie
 import cStringIO
 import ConfigParser
+import email.utils
 from email import MIMEBase, MIMEMultipart, MIMEText, Encoders, Header, message_from_string, Charset
 
 from gluon.contenttype import contenttype
@@ -666,8 +667,7 @@ class Mail(object):
         if bcc:
             to.extend(bcc)
         payload['Subject'] = encoded_or_raw(subject.decode(encoding))
-        payload['Date'] = time.strftime("%a, %d %b %Y %H:%M:%S +0000",
-                                        time.gmtime())
+        payload['Date'] = email.utils.formatdate()
         for k, v in headers.iteritems():
             payload[k] = encoded_or_raw(v.decode(encoding))
         result = {}
@@ -1125,12 +1125,12 @@ class Auth(object):
                    f=f, args=args, vars=vars, scheme=scheme)
 
     def here(self):
-        return URL(args=current.request.args,vars=current.request.vars)
+        return URL(args=current.request.args,vars=current.request.get_vars)
 
     def __init__(self, environment=None, db=None, mailer=True,
                  hmac_key=None, controller='default', function='user',
                  cas_provider=None, signature=True, secure=False,
-                 csrf_prevention=True):
+                 csrf_prevention=True, propagate_extension=None):
         """
         auth=Auth(db)
 
@@ -1153,20 +1153,32 @@ class Auth(object):
         self.user_groups = auth and auth.user_groups or {}
         if secure:
             request.requires_https()
-        if auth and auth.last_visit and auth.last_visit + \
-                datetime.timedelta(days=0, seconds=auth.expiration) > request.now:
-            self.user = auth.user
-            # this is a trick to speed up sessions
-            if (request.now - auth.last_visit).seconds > (auth.expiration / 10):
-                auth.last_visit = request.now
+        now = request.now        
+        # if we have auth info
+        #    if not expired it, used it
+        #    if expired, clear the session
+        # else, only clear auth info in the session
+        if auth:
+            delta = datetime.timedelta(days=0, seconds=auth.expiration)
+            if auth.last_visit and auth.last_visit + delta > now:
+                self.user = auth.user
+                # this is a trick to speed up sessions to avoid many writes
+                if (now - auth.last_visit).seconds > (auth.expiration / 10):
+                    auth.last_visit = request.now
+            else:
+                self.user = None
+                if session.auth:
+                    del session.auth
+                session.renew(clear_session=True)                
         else:
             self.user = None
             if session.auth:
-                del session.auth
+                del session.auth            
         # ## what happens after login?
 
         url_index = URL(controller, 'index')
-        url_login = URL(controller, function, args='login')
+        url_login = URL(controller, function, args='login',
+                        extension = propagate_extension)
         # ## what happens after registration?
 
         settings = self.settings = Settings()
@@ -1398,24 +1410,27 @@ class Auth(object):
             for item in items:
                 self.bar[0][3].append((item['name'], False, item['href']))
 
-        def bootstrap():  # Default web2py scaffolding
-            self.bar = UL(LI(Anr(I(_class=items[0]['icon']),
+        def bootstrap3():  # Default web2py scaffolding
+            def rename(icon): return icon+' '+icon.replace('icon','glyphicon')
+            self.bar = UL(LI(Anr(I(_class=rename('icon '+items[0]['icon'])),
                                  ' ' + items[0]['name'],
-                                 _href=items[0]['href'])),
-                          _class='dropdown-menu')
+                                 _href=items[0]['href'])),_class='dropdown-menu')
             del items[0]
             for item in items:
-                self.bar.insert(-1, LI(Anr(I(_class=item['icon']),
+                self.bar.insert(-1, LI(Anr(I(_class=rename('icon '+item['icon'])),
                                            ' ' + item['name'],
                                            _href=item['href'])))
             self.bar.insert(-1, LI('', _class='divider'))
             if self.user_id:
                 self.bar = LI(Anr(prefix, user_identifier, _href='#'),
-                              self.bar,
-                              _class='dropdown')
+                              self.bar,_class='dropdown')
             else:
-                self.bar = LI(Anr(T('Login'), _href='#'), self.bar,
+                self.bar = LI(Anr(T('Login'),
+                                  _href='#',_class="dropdown-toggle",
+                                  data={'toggle':'dropdown'}), self.bar,
                               _class='dropdown')
+                
+
 
         def bare():
             """ In order to do advanced customization we only need the
@@ -1498,7 +1513,7 @@ class Auth(object):
             self.bar = bare
 
         options = {'asmenu': menu,
-                   'dropdown': bootstrap,
+                   'dropdown': bootstrap3,
                    'bare': bare
                    }  # Define custom modes.
 
@@ -3196,7 +3211,7 @@ class Auth(object):
         """
         if current.request.ajax:
             raise HTTP(403, 'ACCESS DENIED')
-        return 'ACCESS DENIED'
+        return self.messages.access_denied
 
     def requires(self, condition, requires_login=True, otherwise=None):
         """
@@ -3659,9 +3674,8 @@ class Auth(object):
         # resolve=False allows initial setup without wiki redirection
         wiki = None
         if resolve:
-            action = str(current.request.args(0)).startswith("_")
-            if slug and not action:
-                wiki = self._wiki.read(slug,force_render)
+            if slug:
+                wiki = self._wiki.read(slug, force_render)
                 if isinstance(wiki, dict) and wiki.has_key('content'):
                     # We don't want to return a dict object, just the wiki
                     wiki = wiki['content']
@@ -5520,13 +5534,11 @@ class Wiki(object):
         elif slug in '_search':
             return self.search()
         page = self.auth.db.wiki_page(slug=slug)
-        if not page:
-            redirect(URL(args=('_create', slug)))
-        if not self.can_read(page):
+        if page and (not self.can_read(page)):
             return self.not_authorized(page)
         if current.request.extension == 'html':
             if not page:
-                url = URL(args=('_edit', slug))
+                url = URL(args=('_create', slug))
                 return dict(content=A('Create page "%s"' % slug, _href=url, _class="btn"))
             else:
                 html = page.html if not force_render else self.get_renderer()(page)

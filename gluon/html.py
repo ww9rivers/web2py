@@ -1482,8 +1482,11 @@ class A(DIV):
     def xml(self):
         if not self.components and self['_href']:
             self.append(self['_href'])
-        if not self['_disable_with']:
-            self['_data-w2p_disable_with'] = 'default'
+        disable_needed = ['callback', 'cid', 'delete', 'component', 'target']
+        disable_needed = any((self[attr] for attr in disable_needed))
+        if disable_needed:
+            self['_data-w2p_disable_with'] = self['_disable_with'] or 'default'
+            self['_disable_with'] = None
         if self['callback'] and not self['_id']:
             self['_id'] = web2py_uuid()
         if self['delete']:
@@ -1684,7 +1687,7 @@ class TFOOT(DIV):
 
 class COL(DIV):
 
-    tag = 'col'
+    tag = 'col/'
 
 
 class COLGROUP(DIV):
@@ -2219,11 +2222,12 @@ class FORM(DIV):
     REDIRECT_JS = "window.location='%s';return false"
 
     def add_button(self, value, url, _class=None):
-        submit = self.element('input[type=submit]')
+        submit = self.element(_type='submit')
+        _class = "%s w2p-form-button" % _class if _class else "w2p-form-button" 
         submit.parent.append(
-            INPUT(_type="button", _value=value, _class=_class,
-                  _onclick=url if url.startswith('javascript:') else
-                      self.REDIRECT_JS % url))
+            TAG['button'](value, _class=_class,
+                          _onclick=url if url.startswith('javascript:') else
+                          self.REDIRECT_JS % url))
 
     @staticmethod
     def confirm(text='OK', buttons=None, hidden=None):
@@ -2518,7 +2522,7 @@ def test():
 
     >>> from validators import *
     >>> print DIV(A('click me', _href=URL(a='a', c='b', f='c')), BR(), HR(), DIV(SPAN("World"), _class='unknown')).xml()
-    <div><a data-w2p_disable_with="default" href="/a/b/c">click me</a><br /><hr /><div class=\"unknown\"><span>World</span></div></div>
+    <div><a href="/a/b/c">click me</a><br /><hr /><div class=\"unknown\"><span>World</span></div></div>
     >>> print DIV(UL("doc","cat","mouse")).xml()
     <div><ul><li>doc</li><li>cat</li><li>mouse</li></ul></div>
     >>> print DIV(UL("doc", LI("cat", _class='feline'), 18)).xml()
