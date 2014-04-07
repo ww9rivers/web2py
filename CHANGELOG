@@ -1,5 +1,10 @@
-## 2.9.1 - 2.9.3
+## 2.9.6
 
+- fixed a typo in the license of some login_methods code. It is now LGPL consistently with the rest of the web2py code. This change applied to all previous web2py versions.
+
+## 2.9.1 - 2.9.5
+
+- many small but important bug fixes
 - jquery 1.11
 - codemirror 3.21, thanks Paolo Valleri
 - fixed security issue with sessions in database, thanks Nathan Humphreys
@@ -20,7 +25,6 @@
 - invalidate function in web2py.js, thanks Paolo
 - DAL(...,adapter_args=dict(engine='MyISAM'))
 - todolist panel in admin editor, thanks Paolo Valleri
-- enable killing processed in windows, thanks Yair
 
 ## 2.8.1
 
