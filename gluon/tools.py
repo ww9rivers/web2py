@@ -28,6 +28,7 @@ import Cookie
 import cStringIO
 import ConfigParser
 import email.utils
+import random
 from email import MIMEBase, MIMEMultipart, MIMEText, Encoders, Header, message_from_string, Charset
 
 from gluon.contenttype import contenttype
@@ -143,6 +144,7 @@ class Mail(object):
         mail.settings.encrypt = True
         mail.settings.x509_sign_keyfile = None
         mail.settings.x509_sign_certfile = None
+        mail.settings.x509_sign_chainfile = None
         mail.settings.x509_nocerts = False
         mail.settings.x509_crypt_certfiles = None
 
@@ -153,14 +155,23 @@ class Mail(object):
                             to specify home of gnupg
         sign              : sign the message (True or False)
         sign_passphrase   : passphrase for key signing
-        encrypt           : encrypt the message
+        encrypt           : encrypt the message (True or False). It defaults
+                            to True
                          ... x509 only ...
-        x509_sign_keyfile : the signers private key filename (PEM format)
-        x509_sign_certfile: the signers certificate filename (PEM format)
+        x509_sign_keyfile : the signers private key filename or
+                            string containing the key. (PEM format)
+        x509_sign_certfile: the signers certificate filename or
+                            string containing the cert. (PEM format)
+        x509_sign_chainfile: sets the optional all-in-one file where you
+                             can assemble the certificates of Certification
+                             Authorities (CA) which form the certificate
+                             chain of email certificate. It can be a
+                             string containing the certs to. (PEM format)
         x509_nocerts      : if True then no attached certificate in mail
-        x509_crypt_certfiles: the certificates file to encrypt the messages
-                              with can be a file name or a list of
-                              file names (PEM format)
+        x509_crypt_certfiles: the certificates file or strings to encrypt 
+                              the messages with can be a file name /
+                              string or a list of file names /
+                              strings (PEM format)
 
     Examples:
         Create Mail object with authentication data for remote server::
@@ -259,6 +270,7 @@ class Mail(object):
         settings.encrypt = True
         settings.x509_sign_keyfile = None
         settings.x509_sign_certfile = None
+        settings.x509_sign_chainfile = None
         settings.x509_nocerts = False
         settings.x509_crypt_certfiles = None
         settings.debug = False
@@ -271,15 +283,24 @@ class Mail(object):
         to,
         subject = '[no subject]',
         message = '[no message]',
-        attachments=None,
-        cc=None,
-        bcc=None,
-        reply_to=None,
-        sender=None,
-        encoding='utf-8',
-        raw=False,
-        headers={},
-        from_address=None
+        attachments = None,
+        cc = None,
+        bcc = None,
+        reply_to = None,
+        sender = None,
+        encoding = 'utf-8',
+        raw = False,
+        headers = {},
+        from_address = None,
+        cipher_type = None,
+        sign = None,
+        sign_passphrase = None,
+        encrypt = None,
+        x509_sign_keyfile = None,
+        x509_sign_chainfile = None,
+        x509_sign_certfile = None,
+        x509_crypt_certfiles = None,
+        x509_nocerts = None
     ):
         """
         Sends an email using data specified in constructor
@@ -315,6 +336,28 @@ class Mail(object):
             from_address: address to appear in the 'From:' header, this is not
                 the envelope sender. If not specified the sender will be used
 
+            cipher_type : 
+                gpg - need a python-pyme package and gpgme lib
+                x509 - smime
+            gpg_home : you can set a GNUPGHOME environment variable
+                to specify home of gnupg
+            sign : sign the message (True or False)
+            sign_passphrase  : passphrase for key signing
+            encrypt : encrypt the message (True or False). It defaults to True.
+                         ... x509 only ...
+            x509_sign_keyfile : the signers private key filename or
+                string containing the key. (PEM format)
+            x509_sign_certfile: the signers certificate filename or
+                string containing the cert. (PEM format)
+            x509_sign_chainfile: sets the optional all-in-one file where you
+                can assemble the certificates of Certification
+                Authorities (CA) which form the certificate
+                chain of email certificate. It can be a
+                string containing the certs to. (PEM format)
+            x509_nocerts : if True then no attached certificate in mail
+            x509_crypt_certfiles: the certificates file or strings to encrypt 
+                the messages with can be a file name / string or 
+                a list of file names / strings (PEM format)
         Examples:
             Send plain text message to single address::
 
@@ -473,10 +516,10 @@ class Mail(object):
         #######################################################
         #                      CIPHER                         #
         #######################################################
-        cipher_type = self.settings.cipher_type
-        sign = self.settings.sign
-        sign_passphrase = self.settings.sign_passphrase
-        encrypt = self.settings.encrypt
+        cipher_type = cipher_type or self.settings.cipher_type
+        sign = sign if sign != None else self.settings.sign
+        sign_passphrase = sign_passphrase or self.settings.sign_passphrase
+        encrypt = encrypt if encrypt != None else self.settings.encrypt
         #######################################################
         #                       GPGME                         #
         #######################################################
@@ -582,16 +625,24 @@ class Mail(object):
             if not sign and not encrypt:
                 self.error = "No sign and no encrypt is set but cipher type to x509"
                 return False
-            x509_sign_keyfile = self.settings.x509_sign_keyfile
-            if self.settings.x509_sign_certfile:
-                x509_sign_certfile = self.settings.x509_sign_certfile
-            else:
-                # if there is no sign certfile we'll assume the
-                # cert is in keyfile
-                x509_sign_certfile = self.settings.x509_sign_keyfile
+            import os
+            x509_sign_keyfile = x509_sign_keyfile or\
+                                      self.settings.x509_sign_keyfile
+
+            x509_sign_chainfile = x509_sign_chainfile or\
+                                      self.settings.x509_sign_chainfile
+
+            x509_sign_certfile = x509_sign_certfile or\
+                                      self.settings.x509_sign_certfile or\
+                                      x509_sign_keyfile or\
+                                      self.settings.x509_sign_certfile
+
             # crypt certfiles could be a string or a list
-            x509_crypt_certfiles = self.settings.x509_crypt_certfiles
-            x509_nocerts = self.settings.x509_nocerts
+            x509_crypt_certfiles = x509_crypt_certfiles or\
+                                      self.settings.x509_crypt_certfiles
+
+            x509_nocerts = x509_nocerts or\
+                                      self.settings.x509_nocerts
 
             # need m2crypto
             try:
@@ -606,8 +657,21 @@ class Mail(object):
             if sign:
                 #key for signing
                 try:
-                    s.load_key(x509_sign_keyfile, x509_sign_certfile,
-                               callback=lambda x: sign_passphrase)
+                    keyfile_bio = BIO.openfile(x509_sign_keyfile)\
+                        if os.path.isfile(x509_sign_keyfile)\
+                        else BIO.MemoryBuffer(x509_sign_keyfile)
+                    sign_certfile_bio = BIO.openfile(x509_sign_certfile)\
+                        if os.path.isfile(x509_sign_certfile)\
+                        else BIO.MemoryBuffer(x509_sign_certfile)
+                    s.load_key_bio(keyfile_bio, sign_certfile_bio,
+                                   callback=lambda x: sign_passphrase)
+                    if x509_sign_chainfile:
+                        sk = X509.X509_Stack()
+                        chain = X509.load_cert(x509_sign_chainfile)\
+                            if os.path.isfile(x509_sign_chainfile)\
+                            else X509.load_cert_string(x509_sign_chainfile)
+                        sk.push(chain)
+                        s.set_x509_stack(sk)
                 except Exception, e:
                     self.error = "Something went wrong on certificate / private key loading: <%s>" % str(e)
                     return False
@@ -634,8 +698,11 @@ class Mail(object):
                         x509_crypt_certfiles = [x509_crypt_certfiles]
 
                     # make an encryption cert's stack
-                    for x in x509_crypt_certfiles:
-                        sk.push(X509.load_cert(x))
+                    for crypt_certfile in x509_crypt_certfiles:
+                        certfile = X509.load_cert(crypt_certfile)\
+                             if os.path.isfile(crypt_certfile)\
+                             else X509.load_cert_string(crypt_certfile)
+                        sk.push(certfile)
                     s.set_x509_stack(sk)
 
                     s.set_cipher(SMIME.Cipher('des_ede3_cbc'))
@@ -931,6 +998,8 @@ class Auth(object):
         retrieve_username_captcha=None,
         retrieve_password_captcha=None,
         captcha=None,
+        prevent_open_redirect_attacks=True,
+        prevent_password_reset_attacks=True,
         expiration=3600,            # one hour
         long_expiration=3600 * 30 * 24,  # one month
         remember_me_form=True,
@@ -2214,6 +2283,17 @@ class Auth(object):
                         _code='INVALID TICKET'))
         raise HTTP(200, message)
 
+    def _reset_2_factor_auth(self, session):
+        '''When two-step authentication is enabled, this function is used to
+        clear the session after successfully completing second challenge
+        or when the maximum number of tries allowed has expired.
+        '''
+        session.auth_2_factor_user = None
+        session.auth_2_factor = None
+        session.auth_2_factor_enabled = False
+        # Allow up to 4 attempts (the 1st one plus 3 more)
+        session.auth_2_factor_tries_left = 3
+
     def login(
         self,
         next=DEFAULT,
@@ -2249,6 +2329,10 @@ class Auth(object):
 
         ### use session for federated login
         snext = self.get_vars_next()
+        if snext and self.settings.prevent_open_redirect_attacks:
+            if not snext.split('/')[2] == request.env.http_host:
+                snext = None
+                
         if snext:
             session._auth_next = snext
         elif session._auth_next:
@@ -2293,107 +2377,108 @@ class Auth(object):
         old_requires = table_user[username].requires
         table_user[username].requires = tmpvalidator
 
-        # do we use our own login form, or from a central source?
-        if settings.login_form == self:
-            form = SQLFORM(
-                table_user,
-                fields=[username, passfield],
-                hidden=dict(_next=next),
-                showid=settings.showid,
-                submit_button=self.messages.login_button,
-                delete_label=self.messages.delete_label,
-                formstyle=settings.formstyle,
-                separator=settings.label_separator
-            )
-
-            if settings.remember_me_form:
-                ## adds a new input checkbox "remember me for longer"
-                if settings.formstyle != 'bootstrap':
-                    addrow(form, XML("&nbsp;"),
-                           DIV(XML("&nbsp;"),
-                               INPUT(_type='checkbox',
-                                     _class='checkbox',
-                                     _id="auth_user_remember",
-                                         _name="remember",
-                                     ),
-                               XML("&nbsp;&nbsp;"),
-                               LABEL(
-                               self.messages.label_remember_me,
-                               _for="auth_user_remember",
-                               )), "",
-                           settings.formstyle,
-                           'auth_user_remember__row')
-                elif settings.formstyle == 'bootstrap':
-                    addrow(form,
-                           "",
-                           LABEL(
-                               INPUT(_type='checkbox',
-                                     _id="auth_user_remember",
-                                     _name="remember"),
-                               self.messages.label_remember_me,
-                               _class="checkbox"),
-                           "",
-                           settings.formstyle,
-                           'auth_user_remember__row')
-
-            captcha = settings.login_captcha or \
-                (settings.login_captcha != False and settings.captcha)
-            if captcha:
-                addrow(form, captcha.label, captcha, captcha.comment,
-                       settings.formstyle, 'captcha__row')
+        # If two-factor authentication is enabled, and the maximum
+        # number of tries allowed is used up, reset the session to
+        # pre-login state with two-factor auth
+        if session.auth_2_factor_enabled and session.auth_2_factor_tries_left < 1:
+            # Exceeded maximum allowed tries for this code. Require user to enter
+            # username and password again.
+            user = None
             accepted_form = False
+            self._reset_2_factor_auth(session)
+            # Redirect to the default 'next' page without logging
+            # in. If that page requires login, user will be redirected
+            # back to the main login form
+            redirect(next, client_side=settings.client_side)
 
-            if form.accepts(request, session if self.csrf_prevention else None,
-                            formname='login', dbio=False,
-                            onvalidation=onvalidation,
-                            hideerror=settings.hideerror):
-
-                accepted_form = True
-                # check for username in db
-                entered_username = form.vars[username]
-                if multi_login and '@' in entered_username:
-                    # if '@' in username check for email, not username
-                    user = table_user(email = entered_username)
-                else:
-                    user = table_user(**{username: entered_username})
-                if user:
-                    # user in db, check if registration pending or disabled
-                    temp_user = user
-                    if temp_user.registration_key == 'pending':
-                        response.flash = self.messages.registration_pending
-                        return form
-                    elif temp_user.registration_key in ('disabled', 'blocked'):
-                        response.flash = self.messages.login_disabled
-                        return form
-                    elif (not temp_user.registration_key is None 
-                          and temp_user.registration_key.strip()):
-                        response.flash = \
-                            self.messages.registration_verifying
-                        return form
-                    # try alternate logins 1st as these have the
-                    # current version of the password
-                    user = None
-                    for login_method in settings.login_methods:
-                        if login_method != self and \
-                                login_method(request.vars[username],
-                                             request.vars[passfield]):
-                            if not self in settings.login_methods:
-                                # do not store password in db
-                                form.vars[passfield] = None
-                            user = self.get_or_create_user(
-                                form.vars, settings.update_fields)
-                            break
-                    if not user:
-                        # alternates have failed, maybe because service inaccessible
-                        if settings.login_methods[0] == self:
-                            # try logging in locally using cached credentials
-                            if form.vars.get(passfield, '') == temp_user[passfield]:
-                                # success
-                                user = temp_user
-                else:
-                    # user not in db
-                    if not settings.alternate_requires_registration:
-                        # we're allowed to auto-register users from external systems
+        # Before showing the default login form, check whether
+        # we are already on the second step of two-step authentication.
+        # If we are, then skip this login form and use the form for the
+        # second challenge instead.
+        # Note to devs: The code inside the if-block is unchanged from the
+        # previous version of this file, other than for indentation inside
+        # to put it inside the if-block
+        if session.auth_2_factor_user is None:
+            # do we use our own login form, or from a central source?
+            if settings.login_form == self:
+                form = SQLFORM(
+                    table_user,
+                    fields=[username, passfield],
+                    hidden=dict(_next=next),
+                    showid=settings.showid,
+                    submit_button=self.messages.login_button,
+                    delete_label=self.messages.delete_label,
+                    formstyle=settings.formstyle,
+                    separator=settings.label_separator
+                )
+    
+                if settings.remember_me_form:
+                    ## adds a new input checkbox "remember me for longer"
+                    if settings.formstyle != 'bootstrap':
+                        addrow(form, XML("&nbsp;"),
+                               DIV(XML("&nbsp;"),
+                                   INPUT(_type='checkbox',
+                                         _class='checkbox',
+                                         _id="auth_user_remember",
+                                             _name="remember",
+                                         ),
+                                   XML("&nbsp;&nbsp;"),
+                                   LABEL(
+                                   self.messages.label_remember_me,
+                                   _for="auth_user_remember",
+                                   )), "",
+                               settings.formstyle,
+                               'auth_user_remember__row')
+                    elif settings.formstyle == 'bootstrap':
+                        addrow(form,
+                               "",
+                               LABEL(
+                                   INPUT(_type='checkbox',
+                                         _id="auth_user_remember",
+                                         _name="remember"),
+                                   self.messages.label_remember_me,
+                                   _class="checkbox"),
+                               "",
+                               settings.formstyle,
+                               'auth_user_remember__row')
+    
+                captcha = settings.login_captcha or \
+                    (settings.login_captcha != False and settings.captcha)
+                if captcha:
+                    addrow(form, captcha.label, captcha, captcha.comment,
+                           settings.formstyle, 'captcha__row')
+                accepted_form = False
+    
+                if form.accepts(request, session if self.csrf_prevention else None,
+                                formname='login', dbio=False,
+                                onvalidation=onvalidation,
+                                hideerror=settings.hideerror):
+    
+                    accepted_form = True
+                    # check for username in db
+                    entered_username = form.vars[username]
+                    if multi_login and '@' in entered_username:
+                        # if '@' in username check for email, not username
+                        user = table_user(email = entered_username)
+                    else:
+                        user = table_user(**{username: entered_username})
+                    if user:
+                        # user in db, check if registration pending or disabled
+                        temp_user = user
+                        if temp_user.registration_key == 'pending':
+                            response.flash = self.messages.registration_pending
+                            return form
+                        elif temp_user.registration_key in ('disabled', 'blocked'):
+                            response.flash = self.messages.login_disabled
+                            return form
+                        elif (not temp_user.registration_key is None 
+                              and temp_user.registration_key.strip()):
+                            response.flash = \
+                                self.messages.registration_verifying
+                            return form
+                        # try alternate logins 1st as these have the
+                        # current version of the password
+                        user = None
                         for login_method in settings.login_methods:
                             if login_method != self and \
                                     login_method(request.vars[username],
@@ -2404,33 +2489,126 @@ class Auth(object):
                                 user = self.get_or_create_user(
                                     form.vars, settings.update_fields)
                                 break
-                if not user:
-                    self.log_event(self.messages['login_failed_log'],
-                                   request.post_vars)
-                    # invalid login
-                    session.flash = self.messages.invalid_login
-                    callback(onfail, None)
-                    redirect(
-                        self.url(args=request.args, vars=request.get_vars),
-                        client_side=settings.client_side)
+                        if not user:
+                            # alternates have failed, maybe because service inaccessible
+                            if settings.login_methods[0] == self:
+                                # try logging in locally using cached credentials
+                                if form.vars.get(passfield, '') == temp_user[passfield]:
+                                    # success
+                                    user = temp_user
+                    else:
+                        # user not in db
+                        if not settings.alternate_requires_registration:
+                            # we're allowed to auto-register users from external systems
+                            for login_method in settings.login_methods:
+                                if login_method != self and \
+                                        login_method(request.vars[username],
+                                                     request.vars[passfield]):
+                                    if not self in settings.login_methods:
+                                        # do not store password in db
+                                        form.vars[passfield] = None
+                                    user = self.get_or_create_user(
+                                        form.vars, settings.update_fields)
+                                    break
+                    if not user:
+                        self.log_event(self.messages['login_failed_log'],
+                                       request.post_vars)
+                        # invalid login
+                        session.flash = self.messages.invalid_login
+                        callback(onfail, None)
+                        redirect(
+                            self.url(args=request.args, vars=request.get_vars),
+                            client_side=settings.client_side)
+    
+            else: # use a central authentication server
+                cas = settings.login_form
+                cas_user = cas.get_user()
+    
+                if cas_user:
+                    cas_user[passfield] = None
+                    user = self.get_or_create_user(
+                        table_user._filter_fields(cas_user),
+                        settings.update_fields)
+                elif hasattr(cas, 'login_form'):
+                    return cas.login_form()
+                else:
+                    # we need to pass through login again before going on
+                    next = self.url(settings.function, args='login')
+                    redirect(cas.login_url(next),
+                             client_side=settings.client_side)
 
-        else:
-            # use a central authentication server
-            cas = settings.login_form
-            cas_user = cas.get_user()
-
-            if cas_user:
-                cas_user[passfield] = None
-                user = self.get_or_create_user(
-                    table_user._filter_fields(cas_user),
-                    settings.update_fields)
-            elif hasattr(cas, 'login_form'):
-                return cas.login_form()
+        # Extra login logic for two-factor authentication
+        #################################################
+        # If the 'user' variable has a value, this means that the first 
+        # authentication step was successful (i.e. user provided correct
+        # username and password at the first challenge).
+        # Check if this user is signed up for two-factor authentication
+        # Default rule is that the user must be part of a group that is called
+        # 'web2py Two-Step Authentication'
+        if user:
+            memberships = self.db((self.table_membership().user_id == user.id)
+                                  &(self.table_group().id == self.table_membership().group_id)).select(
+                                                  self.table_group().role)
+            session.auth_2_factor_enabled = 'web2py Two-Step Authentication' in [i.role for i in memberships]
+        # If user is signed up for two-factor authentication, present the second
+        # challenge
+        if session.auth_2_factor_enabled:
+            form = SQLFORM.factory(
+                Field('authentication_code',
+                      required=True, 
+                      comment='This code was emailed to you and is required for login.'),
+                hidden=dict(_next=next),
+                formstyle=settings.formstyle,
+                separator=settings.label_separator
+            )
+            # accepted_form is used by some default web2py code later in the
+            # function that handles running specified functions before redirect
+            # Set it to False until the challenge form is accepted.
+            accepted_form = False
+            # Handle the case when a user has submitted the login/password
+            # form successfully, and the password has been validated, but
+            # the two-factor form has not been displayed or validated yet.
+            if session.auth_2_factor_user is None and user is not None:
+                session.auth_2_factor_user = user # store the validated user and associate with this session
+                session.auth_2_factor = random.randint(100000, 999999)
+                session.auth_2_factor_tries_left = 3 # Allow user to try up to 4 times
+                # TODO: Add some error checking to handle cases where email cannot be sent
+                self.settings.mailer.send(
+                    to=user.email, 
+                    subject="Two-step Login Authentication Code", 
+                    message="Your temporary login code is {0}".format(session.auth_2_factor))
+            if form.accepts(request, session if self.csrf_prevention else None,
+                            formname='login', dbio=False,
+                            onvalidation=onvalidation,
+                            hideerror=settings.hideerror):
+                accepted_form = True
+                if form.vars['authentication_code'] == str(session.auth_2_factor):
+                    # Handle the case when the two-factor form has been successfully validated
+                    # and the user was previously stored (the current user should be None because
+                    # in this case, the previous username/password login form should not be displayed.
+                    # This will allow the code after the 2-factor authentication block to proceed as
+                    # normal.
+                    if user is None or user == session.auth_2_factor_user:
+                        user = session.auth_2_factor_user
+                    # For security, because the username stored in the 
+                    # session somehow does not match the just validated
+                    # user. Should not be possible without session stealing
+                    # which is hard with SSL.
+                    elif user != session.auth_2_factor_user:
+                        user = None
+                    # Either way, the user and code associated with this session should
+                    # be removed. This handles cases where the session login may have 
+                    # expired but browser window is open, so the old session key and 
+                    # session usernamem will still exist
+                    self._reset_2_factor_auth(session)
+                else:
+                    # TODO: Limit the number of retries allowed.
+                    response.flash = 'Incorrect code. {0} more attempt(s) remaining.'.format(session.auth_2_factor_tries_left)
+                    session.auth_2_factor_tries_left -= 1
+                    return form
             else:
-                # we need to pass through login again before going on
-                next = self.url(settings.function, args='login')
-                redirect(cas.login_url(next),
-                         client_side=settings.client_side)
+                return form
+        # End login logic for two-factor authentication
 
         # process authenticated users
         if user:
@@ -2468,7 +2646,11 @@ class Auth(object):
         """
         Logouts and redirects to login
         """
-
+        
+        # Clear out 2-step authentication information if user logs
+        # out. This information is also cleared on successful login.
+        self._reset_2_factor_auth(current.session)
+        
         if next is DEFAULT:
             next = self.get_vars_next() or self.settings.logout_next
         if onlogout is DEFAULT:
@@ -2857,8 +3039,19 @@ class Auth(object):
 
         if next is DEFAULT:
             next = self.get_vars_next() or self.settings.reset_password_next
-        try:
+
+        if self.settings.prevent_password_reset_attacks:
+            key = request.vars.key
+            if not key and len(request.args)>1:
+                key = request.args[-1]
+            if key:
+                session._reset_password_key = key
+                redirect(self.url(args='reset_password'))
+            else:
+                key = session._reset_password_key
+        else:
             key = request.vars.key or getarg(-1)
+        try:
             t0 = int(key.split('-')[0])
             if time.time() - t0 > 60 * 60 * 24:
                 raise Exception
@@ -5983,3 +6176,4 @@ class Config(object):
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
+
