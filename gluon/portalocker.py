@@ -35,7 +35,7 @@ provided by John Nielsen <nielsenjf@my-deja.com> in the documentation
 that accompanies the win32 modules.
 
 Author: Jonathan Feinberg <jdf@pobox.com>
-Version: $Id: portalocker.py,v 1.3 2001/05/29 18:47:55 Administrator Exp $
+Version: $Id: portalocker.py,v 1.1 2014/05/21 19:49:43 weiwang Exp $
 """
 
 import logging

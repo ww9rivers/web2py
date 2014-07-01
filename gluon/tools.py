@@ -2331,7 +2331,7 @@ class Auth(object):
         snext = self.get_vars_next()
         if snext and self.settings.prevent_open_redirect_attacks:
             items = snext.split('/')
-            if len(items)<3 or not items[2] == request.env.http_host:
+            if '//' in snext and items[2] != request.env.http_host:
                 snext = None
                 
         if snext:
@@ -2788,7 +2788,7 @@ class Auth(object):
             if self.settings.registration_requires_verification:
                 link = self.url(
                     self.settings.function, args=('verify_email', key), scheme=True)
-                d = dict(request.vars)
+                d = dict(form.vars)
                 d.update(dict(key=key, link=link,username=form.vars[username]))
                 if not (self.settings.mailer and self.settings.mailer.send(
                         to=form.vars.email,
