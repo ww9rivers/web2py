@@ -7390,12 +7390,12 @@ def sqlhtml_validators(field):
         def repr_list(values, row=None): return', '.join(str(v) for v in (values or []))
         field.represent = field.represent or repr_list
     if field.unique:
-        requires.insert(0, validators.IS_NOT_IN_DB(db, field))
+        requires.append(validators.IS_NOT_IN_DB(db, field))
     sff = ['in', 'do', 'da', 'ti', 'de', 'bo']
     if field.notnull and not field_type[:2] in sff:
-        requires.insert(0, validators.IS_NOT_EMPTY())
+        requires.append(validators.IS_NOT_EMPTY())
     elif not field.notnull and field_type[:2] in sff and requires:
-        requires[-1] = validators.IS_EMPTY_OR(requires[-1])
+        requires[0] = validators.IS_EMPTY_OR(requires[0])
     return requires
 
 
@@ -9223,9 +9223,15 @@ class Table(object):
         for field in self:
             if field.type == 'upload' and field.name in fields:
                 value = fields[field.name]
-                if value is not None and not isinstance(value, str):
+                if not (value is None or isinstance(value, str)):
                     if hasattr(value, 'file') and hasattr(value, 'filename'):
                         new_name = field.store(value.file, filename=value.filename)
+                    elif isinstance(value,dict): 
+                        if 'data' in value and 'filename' in value:
+                            stream = StringIO.StringIO(value['data'])
+                            new_name = field.store(stream, filename=value['filename'])
+                        else:
+                            new_name = None
                     elif hasattr(value, 'read') and hasattr(value, 'name'):
                         new_name = field.store(value, filename=value.name)
                     else:
@@ -10734,6 +10740,7 @@ class Set(object):
             response.updated = None
         else:
             if not any(f(self, new_fields) for f in table._before_update):
+                table._attempt_upload(new_fields)
                 fields = table._listify(new_fields, update=True)
                 if not fields: raise SyntaxError("No fields to update")
                 ret = self.db._adapter.update(tablename, self.query, fields)
