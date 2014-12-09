@@ -25,7 +25,8 @@ from gluon.restricted import restricted, compile2
 from gluon.fileutils import mktree, listdir, read_file, write_file
 from gluon.myregex import regex_expose, regex_longcomments
 from gluon.languages import translator
-from gluon.dal import BaseAdapter, SQLDB, SQLField, DAL, Field
+from gluon.dal import DAL, Field
+from gluon.dal.base import BaseAdapter
 from gluon.sqlhtml import SQLFORM, SQLTABLE
 from gluon.cache import Cache
 from gluon.globals import current, Response
@@ -38,6 +39,7 @@ import marshal
 import shutil
 import imp
 import logging
+import types
 logger = logging.getLogger("web2py")
 from gluon import rewrite
 from custom_import import custom_import_install
@@ -211,7 +213,7 @@ def LOAD(c=None, f='index', args=None, vars=None,
             request.env.path_info
         other_request.cid = target
         other_request.env.http_web2py_component_element = target
-        other_request.restful = request.restful  # Needed when you call LOAD() on a controller who has some actions decorates with @request.restful()
+        other_request.restful = types.MethodType(request.restful.im_func, other_request) # A bit nasty but needed to use LOAD on action decorates with @request.restful()
         other_response.view = '%s/%s.%s' % (c, f, other_request.extension)
 
         other_environment = copy.copy(current.globalenv)  # NASTY
@@ -387,8 +389,8 @@ _base_environment_['HTTP'] = HTTP
 _base_environment_['redirect'] = redirect
 _base_environment_['DAL'] = DAL
 _base_environment_['Field'] = Field
-_base_environment_['SQLDB'] = SQLDB        # for backward compatibility
-_base_environment_['SQLField'] = SQLField  # for backward compatibility
+_base_environment_['SQLDB'] = DAL        # for backward compatibility
+_base_environment_['SQLField'] = Field  # for backward compatibility
 _base_environment_['SQLFORM'] = SQLFORM
 _base_environment_['SQLTABLE'] = SQLTABLE
 _base_environment_['LOAD'] = LOAD
@@ -653,8 +655,8 @@ def run_view_in(environment):
     folder = request.folder
     path = pjoin(folder, 'compiled')
     badv = 'invalid view (%s)' % view
-    if response.generic_patterns:
-        patterns = response.generic_patterns
+    patterns = response.get('generic_patterns')
+    if patterns:
         regex = re_compile('|'.join(map(fnmatch.translate, patterns)))
         short_action = '%(controller)s/%(function)s.%(extension)s' % request
         allow_generic = regex.search(short_action)

@@ -15,11 +15,11 @@
 'About': 'Sobre',
 'Access Control': 'Controle de Acesso',
 'Administrative Interface': 'Interface Administrativa',
-'@markmin\x01An error occured, please [[reload %s]] the page': 'An error occured, please [[reload %s]] the page',
+'@markmin\x01An error occured, please [[reload %s]] the page': 'Ocorreu um erro, por favor [[reload %s]] a página',
 'Administrative interface': 'Interface administrativa',
 'Ajax Recipes': 'Receitas de Ajax',
-'appadmin is disabled because insecure channel': 'Administração desativada devido ao canal inseguro',
-'Are you sure you want to delete this object?': 'Você está certo que deseja remover este objeto?',
+'appadmin is disabled because insecure channel': 'Administração desativada porque o canal não é seguro',
+'Are you sure you want to delete this object?': 'Você está certo que deseja apagar este objeto?',
 'Available Databases and Tables': 'Bancos de dados e tabelas disponíveis',
 'Buy this book': 'Compre o livro',
 'cache': 'cache',
@@ -49,6 +49,7 @@
 'Delete:': 'Apagar:',
 'Demo': 'Demo',
 <<<<<<< HEAD:applications/sis2py/languages/pt-br.py
+<<<<<<< HEAD:applications/sis2py/languages/pt-br.py
 'Deployment Recipes': 'Deployment Recipes',
 'Description': 'Description',
 'Documentation': 'Documentation',
@@ -60,11 +61,14 @@
 'Errors': 'Errors',
 =======
 'Deployment Recipes': 'Receitas de deployment',
+=======
+'Deployment Recipes': 'Receitas de deploy',
+>>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53:applications/welcome/languages/pt-br.py
 'Description': 'Descrição',
-'design': 'design',
+'design': 'projeto',
 'DISK': 'DISK',
-'Disk Cache Keys': 'Disk Cache Keys',
-'Disk Cleared': 'Disk Cleared',
+'Disk Cache Keys': 'Chaves do Cache de Disco',
+'Disk Cleared': 'Disco Limpo',
 'Documentation': 'Documentação',
 "Don't know what to do?": "Não sabe o que fazer?",
 'done!': 'concluído!',
@@ -76,20 +80,29 @@
 'Edit This App': 'Editar esta aplicação',
 'Email and SMS': 'Email e SMS',
 'Errors': 'Erros',
-'Enter an integer between %(min)g and %(max)g': 'Enter an integer between %(min)g and %(max)g',
+'Enter an integer between %(min)g and %(max)g': 'Informe um valor inteiro entre %(min)g e %(max)g',
 'export as csv file': 'exportar como um arquivo csv',
+<<<<<<< HEAD:applications/sis2py/languages/pt-br.py
 >>>>>>> 98b0b21c69bae233094f39bb1f236177d3d60b0c:applications/welcome/languages/pt-br.py
 'FAQ': 'FAQ',
+=======
+'FAQ': 'Perguntas frequentes',
+>>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53:applications/welcome/languages/pt-br.py
 'First name': 'Nome',
 'Forms and Validators': 'Formulários e Validadores',
 'Free Applications': 'Aplicações gratuitas',
 'Group ID': 'ID do Grupo',
 'Groups': 'Grupos',
 'Hello World': 'Olá Mundo',
+<<<<<<< HEAD:applications/sis2py/languages/pt-br.py
 'Home': 'Home',
 <<<<<<< HEAD:applications/sis2py/languages/pt-br.py
 =======
 'How did you get here?': 'Como cheguei aqui?',
+=======
+'Home': 'Principal',
+'How did you get here?': 'Como você chegou aqui?',
+>>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53:applications/welcome/languages/pt-br.py
 'import': 'importar',
 >>>>>>> 98b0b21c69bae233094f39bb1f236177d3d60b0c:applications/welcome/languages/pt-br.py
 'Import/Export': 'Importar/Exportar',
@@ -108,7 +121,7 @@
 'Invalid email': 'Email inválido',
 'Invalid Query': 'Consulta Inválida',
 'invalid request': 'requisição inválida',
-'Key': 'Key',
+'Key': 'Chave',
 'Last name': 'Sobrenome',
 'Layout': 'Layout',
 'Layout Plugins': 'Plugins de Layout',
@@ -120,11 +133,15 @@
 'Login': 'Autentique-se',
 'Lost Password': 'Esqueceu sua senha?',
 <<<<<<< HEAD:applications/sis2py/languages/pt-br.py
+<<<<<<< HEAD:applications/sis2py/languages/pt-br.py
 'Main Menu': 'Menu Principal',
 'Menu Model': 'Modelo de Menu',
 'Name': 'Name',
 =======
 'lost password?': 'esqueceu a senha?',
+=======
+'lost password?': 'esqueceu sua senha?',
+>>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53:applications/welcome/languages/pt-br.py
 'Main Menu': 'Menu Principal',
 'Manage Cache': 'Gerenciar Cache',
 'Menu Model': 'Modelo de Menu',
@@ -132,6 +149,7 @@
 'Name': 'Nome',
 >>>>>>> 98b0b21c69bae233094f39bb1f236177d3d60b0c:applications/welcome/languages/pt-br.py
 'New Record': 'Novo Registro',
+<<<<<<< HEAD:applications/sis2py/languages/pt-br.py
 'No databases in this application': 'Sem bancos de dados nesta aplicação',
 <<<<<<< HEAD:applications/sis2py/languages/pt-br.py
 'Origin': 'Origin',
@@ -168,6 +186,13 @@
 =======
 'Object or table name': 'Object or table name',
 'Online examples': 'Alguns exemplos',
+=======
+'new record inserted': 'novo registro inserido',
+'next 100 rows': 'próximas 100 linhas',
+'No databases in this application': 'Não há bancos de dados nesta aplicação',
+'Object or table name': 'Nome do objeto do da tabela',
+'Online examples': 'Exemplos online',
+>>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53:applications/welcome/languages/pt-br.py
 'or import from csv file': 'ou importar de um arquivo csv',
 'Origin': 'Origem',
 'Other Plugins': 'Outros Plugins',
@@ -207,11 +232,11 @@
 'submit': 'enviar',
 'Support': 'Suporte',
 'Sure you want to delete this object?': 'Está certo(a) que deseja apagar este objeto?',
-'Table': 'tabela',
+'Table': 'Tabela',
 'Table name': 'Nome da tabela',
 'The "query" is a condition like "db.table1.field1==\'value\'". Something like "db.table1.field1==db.table2.field2" results in a SQL JOIN.': 'Uma "consulta" é uma condição como "db.tabela1.campo1==\'valor\'". Expressões como "db.tabela1.campo1==db.tabela2.campo2" resultam em um JOIN SQL.',
 'The Core': 'The Core',
-'The output of the file is a dictionary that was rendered by the view %s': 'The output of the file is a dictionary that was rendered by the view %s',
+'The output of the file is a dictionary that was rendered by the view %s': 'A saída do arquivo é um dicionário que foi apresentado pela visão %s',
 'The Views': 'As views',
 'This App': 'Esta aplicação',
 'This email already has an account': 'Este email já tem uma conta',
@@ -223,7 +248,7 @@
 'Update:': 'Atualizar:',
 'Use (...)&(...) for AND, (...)|(...) for OR, and ~(...)  for NOT to build more complex queries.': 'Use (...)&(...) para AND, (...)|(...) para OR, e ~(...)  para NOT para construir consultas mais complexas.',
 'User ID': 'ID do Usuário',
-'User Voice': 'User Voice',
+'User Voice': 'Opinião dos usuários',
 'Videos': 'Vídeos',
 'View': 'Visualização',
 'Web2py': 'Web2py',
@@ -276,9 +301,9 @@
 'Welcome to web2py': 'Bem-vindo ao web2py',
 'Welcome to web2py!': 'Bem-vindo ao web2py!',
 'Which called the function %s located in the file %s': 'Que chamou a função %s localizada no arquivo %s',
-'You are successfully running web2py': 'Você está rodando o web2py com sucesso',
-'You are successfully running web2py.': 'Você está rodando o web2py com sucesso.',
-'You can modify this application and adapt it to your needs': 'Você pode modificar esta aplicação e adaptá-la para as suas necessidades',
+'You are successfully running web2py': 'Você está executando o web2py com sucesso',
+'You are successfully running web2py.': 'Você está executando o web2py com sucesso.',
+'You can modify this application and adapt it to your needs': 'Você pode modificar esta aplicação e adaptá-la às suas necessidades',
 'You visited the url %s': 'Você acessou a url %s',
 'Working...': 'Trabalhando...',
 >>>>>>> 98b0b21c69bae233094f39bb1f236177d3d60b0c:applications/welcome/languages/pt-br.py

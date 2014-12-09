@@ -491,6 +491,15 @@
 'Timestamp': 'Marca de tiempo',
 >>>>>>> 4cbdf612af9e9c992e99c6c9e60e2170e4deb853:applications/welcome/languages/es.py
 'to  previous version.': 'a la versión previa.',
+<<<<<<< HEAD:applications/sis2py/languages/es-es.py
+=======
+'To emulate a breakpoint programatically, write:': 'Emular un punto de ruptura programáticamente, escribir:',
+'to use the debugger!': '¡usar el depurador!',
+'toggle breakpoint': 'alternar punto de ruptura',
+'Toggle comment': 'Alternar comentario',
+'Toggle Fullscreen': 'Alternar pantalla completa',
+'too short': 'demasiado corto',
+>>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53:applications/welcome/languages/es.py
 'translation strings for the application': 'cadenas de caracteres de traducción para la aplicación',
 'try': 'intente',
 'try something like': 'intente algo como',

@@ -15,40 +15,19 @@ try:
 except:
     from io import StringIO
 
-def fix_sys_path():
-    """
-    logic to have always the correct sys.path
-     '', web2py/gluon, web2py/site-packages, web2py/ ...
-    """
+from fix_path import fix_sys_path
 
-    def add_path_first(path):
-        sys.path = [path] + [p for p in sys.path if (
-            not p == path and not p == (path + '/'))]
-
-    path = os.path.dirname(os.path.abspath(__file__))
-
-    if not os.path.isfile(os.path.join(path,'web2py.py')):
-        i = 0
-        while i<10:
-            i += 1
-            if os.path.exists(os.path.join(path,'web2py.py')):
-                break
-            path = os.path.abspath(os.path.join(path, '..'))
-
-    paths = [path,
-             os.path.abspath(os.path.join(path, 'site-packages')),
-             os.path.abspath(os.path.join(path, 'gluon')),
-             '']
-    [add_path_first(path) for path in paths]
-
-fix_sys_path()
+fix_sys_path(__file__)
 
 #for travis-ci
-DEFAULT_URI = os.environ.get('DB', 'sqlite:memory')
+DEFAULT_URI = os.getenv('DB', 'sqlite:memory')
 
 print 'Testing against %s engine (%s)' % (DEFAULT_URI.partition(':')[0], DEFAULT_URI)
 
-from dal import DAL, Field, Table, SQLALL
+from dal import DAL, Field
+from dal.objects import Table
+from dal.helpers.classes import SQLALL
+from gluon.cache import CacheInRam
 
 ALLOWED_DATATYPES = [
     'string',
@@ -64,6 +43,9 @@ ALLOWED_DATATYPES = [
     'password',
     'json',
     ]
+
+IS_POSTGRESQL = 'postgres' in DEFAULT_URI
+
 
 
 def setUpModule():
@@ -129,6 +111,7 @@ class TestFields(unittest.TestCase):
                 isinstance(f.formatter(datetime.datetime.now()), str)
 
     def testRun(self):
+        """Test all field types and their return values"""
         db = DAL(DEFAULT_URI, check_reserved=['all'])
         for ft in ['string', 'text', 'password', 'upload', 'blob']:
             db.define_table('tt', Field('aa', ft, default=''))
@@ -148,8 +131,22 @@ class TestFields(unittest.TestCase):
         self.assertEqual(db().select(db.tt.aa)[0].aa, True)
         db.tt.drop()
         db.define_table('tt', Field('aa', 'json', default={}))
-        self.assertEqual(db.tt.insert(aa={}), 1)
-        self.assertEqual(db().select(db.tt.aa)[0].aa, {})
+        # test different python objects for correct serialization in json
+        objs = [
+            {'a' : 1, 'b' : 2},
+            [1, 2, 3],
+            'abc',
+            True,
+            False,
+            None,
+            11,
+            14.3,
+            long(11)
+        ]
+        for obj in objs:
+            rtn_id = db.tt.insert(aa=obj)
+            rtn = db(db.tt.id == rtn_id).select().first().aa
+            self.assertEqual(obj, rtn)
         db.tt.drop()
         db.define_table('tt', Field('aa', 'date',
                         default=datetime.date.today()))
@@ -410,6 +407,13 @@ class TestLike(unittest.TestCase):
             self.assertEqual(db(db.tt.aa.upper().like('A%')).count(), 1)
             self.assertEqual(db(db.tt.aa.upper().like('%B%')).count(),1)
             self.assertEqual(db(db.tt.aa.upper().like('%C')).count(), 1)
+
+        # startswith endswith tests
+        self.assertEqual(db(db.tt.aa.startswith('a')).count(), 1)
+        self.assertEqual(db(db.tt.aa.endswith('c')).count(), 1)
+        self.assertEqual(db(db.tt.aa.startswith('c')).count(), 0)
+        self.assertEqual(db(db.tt.aa.endswith('a')).count(), 0)
+
         db.tt.drop()
         db.define_table('tt', Field('aa', 'integer'))
         self.assertEqual(db.tt.insert(aa=1111111111), 1)
@@ -549,9 +553,8 @@ class TestMinMaxSumAvg(unittest.TestCase):
         db.tt.drop()
 
 
-class TestCache(unittest.TestCase):
+class TestCacheSelect(unittest.TestCase):
     def testRun(self):
-        from cache import CacheInRam
         cache = CacheInRam()
         db = DAL(DEFAULT_URI, check_reserved=['all'])
         db.define_table('tt', Field('aa'))
@@ -1444,7 +1447,6 @@ class TestQuoting(unittest.TestCase):
                 db._adapter.types[key]=db._adapter.types[key].replace(
                 '%(on_delete_action)s','NO ACTION')
 
-                
         t0 = db.define_table('t0',
                         Field('f', 'string'))
         t1 = db.define_table('b',
@@ -1521,7 +1523,7 @@ class TestQuoting(unittest.TestCase):
 
 class TestTableAndFieldCase(unittest.TestCase):
     """
-    at the Python level we should not allow db.C and db.c because of .table conflicts on windows 
+    at the Python level we should not allow db.C and db.c because of .table conflicts on windows
     but it should be possible to map two different names into distinct tables "c" and "C" at the Python level
     By default Python models names should be mapped into lower case table names and assume case insensitivity.
     """
@@ -1535,6 +1537,42 @@ class TestQuotesByDefault(unittest.TestCase):
     """
     def testme(self):
         return
+
+
+class TestGis(unittest.TestCase):
+
+    def testGeometry(self):
+        from gluon.dal import geoPoint, geoLine, geoPolygon
+        if not IS_POSTGRESQL: return
+        db = DAL(DEFAULT_URI, check_reserved=['all'], ignore_field_case=False)
+        t0 = db.define_table('t0', Field('point', 'geometry()'))
+        t1 = db.define_table('t1', Field('line', 'geometry(public, 4326, 2)'))
+        t2 = db.define_table('t2', Field('polygon', 'geometry(public, 4326, 2)'))
+        t0.insert(point=geoPoint(1,1))
+        text = db(db.t0.id).select(db.t0.point.st_astext()).first()[db.t0.point.st_astext()]
+        self.assertEqual(text, "POINT(1 1)")
+        t1.insert(line=geoLine((1,1),(2,2)))
+        text = db(db.t1.id).select(db.t1.line.st_astext()).first()[db.t1.line.st_astext()]
+        self.assertEqual(text, "LINESTRING(1 1,2 2)")
+        t2.insert(polygon=geoPolygon((0,0),(2,0),(2,2),(0,2),(0,0)))
+        text = db(db.t2.id).select(db.t2.polygon.st_astext()).first()[db.t2.polygon.st_astext()]
+        self.assertEqual(text, "POLYGON((0 0,2 0,2 2,0 2,0 0))")
+        query = t0.point.st_intersects(geoLine((0,0),(2,2)))
+        output = db(query).select(db.t0.point).first()[db.t0.point]
+        self.assertEqual(output, "POINT(1 1)")
+        query = t2.polygon.st_contains(geoPoint(1,1))
+        n = db(query).count()
+        self.assertEqual(n, 1)
+        x=t0.point.st_x()
+        y=t0.point.st_y()
+        point = db(t0.id).select(x, y).first()
+        self.assertEqual(point[x], 1)
+        self.assertEqual(point[y], 1)
+        t0.drop()
+        t1.drop()
+        t2.drop()
+        return
+
 
 if __name__ == '__main__':
     unittest.main()

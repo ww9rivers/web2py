@@ -6,7 +6,7 @@
 ## - index is the default action of any application
 ## - user is required for authentication and authorization
 ## - download is for downloading files uploaded in the db (does streaming)
-## - call exposes all registered services (none by default)
+## - api is an example of Hypermedia API support and access control
 #########################################################################
 
 def index():
@@ -41,6 +41,10 @@ def user():
     return dict(form=auth())
 
 
+<<<<<<< HEAD:applications/sis2py/controllers/default.py
+=======
+@cache.action()
+>>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53:applications/welcome/controllers/default.py
 def download():
     """
     allows downloading of uploaded files
@@ -59,9 +63,10 @@ def call():
     return service()
 
 
-@auth.requires_signature()
-def data():
+@auth.requires_login() 
+def api():
     """
+<<<<<<< HEAD:applications/sis2py/controllers/default.py
     http://..../[app]/default/data/tables
     http://..../[app]/default/data/create/[table]
     http://..../[app]/default/data/read/[table]/[id]
@@ -73,5 +78,13 @@ def data():
       A('table',_href=URL('data/tables',user_signature=True))
     or with the signed load operator
       LOAD('default','data.load',args='tables',ajax=True,user_signature=True)
+=======
+    this is example of API with access control
+    WEB2PY provides Hypermedia API (Collection+JSON) Experimental
+>>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53:applications/welcome/controllers/default.py
     """
-    return dict(form=crud())
+    from gluon.contrib.hypermedia import Collection
+    rules = {
+        '<tablename>': {'GET':{},'POST':{},'PUT':{},'DELETE':{}},
+        }
+    return Collection(db).process(request,response,rules)

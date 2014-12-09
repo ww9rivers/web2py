@@ -91,12 +91,12 @@ try:
 except:
     from simplejson import loads, dumps
 
-IDENTIFIER = "%s#%s" % (socket.gethostname(), os.getpid())
+IDENTIFIER = "%s#%s" % (socket.gethostname(),os.getpid())
 
 logger = logging.getLogger('web2py.scheduler.%s' % IDENTIFIER)
 
 from gluon import DAL, Field, IS_NOT_EMPTY, IS_IN_SET, IS_NOT_IN_DB
-from gluon import IS_INT_IN_RANGE, IS_DATETIME
+from gluon import IS_INT_IN_RANGE, IS_DATETIME, IS_IN_DB
 from gluon.utils import web2py_uuid
 from gluon.storage import Storage
 
@@ -117,7 +117,7 @@ STOP_TASK = 'STOP_TASK'
 EXPIRED = 'EXPIRED'
 SECONDS = 1
 HEARTBEAT = 3 * SECONDS
-MAXHIBERNATION = 10 * HEARTBEAT
+MAXHIBERNATION = 10
 CLEAROUT = '!clear!'
 
 CALLABLETYPES = (types.LambdaType, types.FunctionType,
@@ -129,7 +129,6 @@ class Task(object):
     """Defines a "task" object that gets passed from the main thread to the
     executor's one
     """
-
     def __init__(self, app, function, timeout, args='[]', vars='{}', **kwargs):
         logger.debug(' new task allocated: %s.%s', app, function)
         self.app = app
@@ -147,7 +146,6 @@ class TaskReport(object):
     """Defines a "task report" object that gets passed from the executor's
     thread to the main one
     """
-
     def __init__(self, status, result=None, output=None, tb=None):
         logger.debug('    new task report: %s', status)
         if tb:
@@ -162,6 +160,57 @@ class TaskReport(object):
     def __str__(self):
         return '<TaskReport: %s>' % self.status
 
+class JobGraph(object):
+    """Experimental: with JobGraph you can specify
+    dependencies amongs tasks"""
+
+    def __init__(self, db, job_name):
+        self.job_name = job_name or 'job_0'
+        self.db = db
+
+    def add_deps(self, task_parent, task_child):
+        """Creates a dependency between task_parent and task_child"""
+        self.db.scheduler_task_deps.insert(task_parent=task_parent, task_child=task_child, job_name=self.job_name)
+
+    def validate(self, job_name):
+        """Validates if all tasks job_name can be completed, i.e. there
+        are no mutual dependencies among tasks.
+        Commits at the end if successfull, or it rollbacks the entire
+        transaction. Handle with care!"""
+        db = self.db
+        sd = db.scheduler_task_deps
+        if job_name:
+            q = sd.job_name == job_name
+        else:
+            q = sd.id > 0
+
+        edges = db(q).select()
+        nested_dict = {}
+        for row in edges:
+            k = row.task_parent
+            if k in nested_dict:
+                nested_dict[k].add(row.task_child)
+            else:
+                nested_dict[k] = set((row.task_child,))
+        try:
+            rtn = []
+            for k, v in nested_dict.items():
+                v.discard(k) # Ignore self dependencies
+            extra_items_in_deps = reduce(set.union, nested_dict.values()) - set(nested_dict.keys())
+            nested_dict.update(dict((item, set()) for item in extra_items_in_deps))
+            while True:
+                ordered = set(item for item,dep in nested_dict.items() if not dep)
+                if not ordered:
+                    break
+                rtn.append(ordered)
+                nested_dict = dict((item, (dep - ordered)) for item, dep in nested_dict.items()
+                    if item not in ordered)
+            assert not nested_dict, "A cyclic dependency exists amongst %r" % nested_dict
+            db.commit()
+            return rtn
+        except:
+            db.rollback()
+            return None
 
 def demo_function(*argv, **kwargs):
     """ test function """
@@ -170,10 +219,9 @@ def demo_function(*argv, **kwargs):
         time.sleep(1)
     return 'done'
 
-#the two functions below deal with simplejson decoding as unicode,
-#esp for the dict decode and subsequent usage as function Keyword arguments
-#unicode variable names won't work!
-#borrowed from http://stackoverflow.com/questions/956867/
+#the two functions below deal with simplejson decoding as unicode, esp for the dict decode
+#and subsequent usage as function Keyword arguments unicode variable names won't work!
+#borrowed from http://stackoverflow.com/questions/956867/how-to-get-string-objects-instead-unicode-ones-from-json-in-python
 
 
 def _decode_list(lst):
@@ -220,7 +268,7 @@ def executor(queue, task, out):
         def write(self, data):
             self.out_queue.put(data)
 
-    W2P_TASK = Storage({'id': task.task_id, 'uuid': task.uuid})
+    W2P_TASK = Storage({'id' : task.task_id, 'uuid' : task.uuid})
     stdout = LogOutput(out)
     try:
         if task.app:
@@ -245,7 +293,7 @@ def executor(queue, task, out):
                 raise NameError(
                     "name '%s' not found in scheduler's environment" % f)
             #Inject W2P_TASK into environment
-            _env.update({'W2P_TASK': W2P_TASK})
+            _env.update({'W2P_TASK' : W2P_TASK})
             #Inject W2P_TASK into current
             from gluon import current
             current.W2P_TASK = W2P_TASK
@@ -550,7 +598,7 @@ class Scheduler(MetaScheduler):
 
     def define_tables(self, db, migrate):
         """Defines Scheduler tables structure"""
-        from gluon.dal import DEFAULT
+        from gluon.dal.base import DEFAULT
         logger.debug('defining tables (migrate=%s)', migrate)
         now = self.now
         db.define_table(
@@ -583,7 +631,7 @@ class Scheduler(MetaScheduler):
             Field('prevent_drift', 'boolean', default=False,
                   comment='Cron-like start_times between runs'),
             Field('timeout', 'integer', default=60, comment='seconds',
-                  requires=IS_INT_IN_RANGE(0, None)),
+                  requires=IS_INT_IN_RANGE(1, None)),
             Field('sync_output', 'integer', default=0,
                   comment="update output every n sec: 0=never",
                   requires=IS_INT_IN_RANGE(0, None)),
@@ -618,6 +666,18 @@ class Scheduler(MetaScheduler):
             Field('group_names', 'list:string', default=self.group_names),
             Field('worker_stats', 'json'),
             migrate=self.__get_migrate('scheduler_worker', migrate)
+            )
+
+        db.define_table(
+            'scheduler_task_deps',
+            Field('job_name', default='job_0'),
+            Field('task_parent', 'integer',
+                requires=IS_IN_DB(db, 'scheduler_task.id',
+                                      '%(task_name)s')
+            ),
+            Field('task_child', 'reference scheduler_task'),
+            Field('can_visit', 'boolean', default=False),
+            migrate=self.__get_migrate('scheduler_task_deps', migrate)
             )
 
         if migrate is not False:
@@ -846,6 +906,8 @@ class Scheduler(MetaScheduler):
                      times_failed=0
                      )
             db(st.id == task.task_id).update(**d)
+            if status == COMPLETED:
+                self.update_dependencies(db, task.task_id)
         else:
             st_mapping = {'FAILED': 'FAILED',
                           'TIMEOUT': 'TIMEOUT',
@@ -860,6 +922,9 @@ class Scheduler(MetaScheduler):
                 status=status
             )
         logger.info('task completed (%s)', task_report.status)
+
+    def update_dependencies(self, db, task_id):
+        db(db.scheduler_task_deps.task_child == task_id).update(can_visit=True)
 
     def adj_hibernation(self):
         """Used to increase the "sleep" interval for DISABLED workers"""
@@ -905,12 +970,11 @@ class Scheduler(MetaScheduler):
                 if mybackedstatus == DISABLED:
                     # keep sleeping
                     self.w_stats.status = DISABLED
-                    if self.w_stats.sleep >= MAXHIBERNATION:
-                        logger.debug('........recording heartbeat (%s)',
-                            self.w_stats.status)
-                        db(sw.worker_name == self.worker_name).update(
-                            last_heartbeat=now,
-                            worker_stats=self.w_stats)
+                    logger.debug('........recording heartbeat (%s)',
+                        self.w_stats.status)
+                    db(sw.worker_name == self.worker_name).update(
+                        last_heartbeat=now,
+                        worker_stats=self.w_stats)
                 elif mybackedstatus == TERMINATE:
                     self.w_stats.status = TERMINATE
                     logger.debug("Waiting to terminate the current task")
@@ -1007,7 +1071,7 @@ class Scheduler(MetaScheduler):
         Deals with group_name(s) logic, in order to assign linearly tasks
         to available workers for those groups
         """
-        sw, st = db.scheduler_worker, db.scheduler_task
+        sw, st, sd = db.scheduler_worker, db.scheduler_task, db.scheduler_task_deps
         now = self.now()
         all_workers = db(sw.status == ACTIVE).select()
         #build workers as dict of groups
@@ -1028,14 +1092,36 @@ class Scheduler(MetaScheduler):
             (st.stop_time < now)
             ).update(status=EXPIRED)
 
+        deps_with_no_deps = db(
+            (sd.can_visit == False) &
+            (~sd.task_child.belongs(
+                db(sd.can_visit == False)._select(sd.task_parent)
+                )
+            )
+            )._select(sd.task_child)
+        no_deps = db(
+            (st.status.belongs((QUEUED,ASSIGNED))) &
+            (
+                (sd.id == None) | (st.id.belongs(deps_with_no_deps))
+
+            )
+            )._select(st.id, distinct=True, left=sd.on(
+                    (st.id == sd.task_parent) &
+                    (sd.can_visit == False)
+                    )
+            )
+
         all_available = db(
             (st.status.belongs((QUEUED, ASSIGNED))) &
             ((st.times_run < st.repeats) | (st.repeats == 0)) &
             (st.start_time <= now) &
             ((st.stop_time == None) | (st.stop_time > now)) &
             (st.next_run_time <= now) &
-            (st.enabled == True)
+            (st.enabled == True) &
+            (st.id.belongs(no_deps))
         )
+
+
         limit = len(all_workers) * (50 / (len(wkgroups) or 1))
         #if there are a moltitude of tasks, let's figure out a maximum of
         #tasks per worker. This can be further tuned with some added
@@ -1101,13 +1187,16 @@ class Scheduler(MetaScheduler):
         # should only sleep until next available task
 
     def set_worker_status(self, group_names=None, action=ACTIVE,
-        exclude=None, limit=None):
+        exclude=None, limit=None, worker_name=None):
         """Internal function to set worker's status"""
         ws = self.db.scheduler_worker
         if not group_names:
             group_names = self.group_names
         elif isinstance(group_names, str):
             group_names = [group_names]
+        if worker_name:
+            self.db(ws.worker_name == worker_name).update(status=action)
+            return
         exclusion = exclude and exclude.append(action) or [action]
         if not limit:
             for group in group_names:
@@ -1123,7 +1212,7 @@ class Scheduler(MetaScheduler):
                     )._select(ws.id, limitby=(0,limit))
                 self.db(ws.id.belongs(workers)).update(status=action)
 
-    def disable(self, group_names=None, limit=None):
+    def disable(self, group_names=None, limit=None, worker_name=None):
         """Sets DISABLED on the workers processing `group_names` tasks.
         A DISABLED worker will be kept alive but it won't be able to process
         any waiting tasks, essentially putting it to sleep.
@@ -1134,7 +1223,7 @@ class Scheduler(MetaScheduler):
             exclude=[DISABLED, KILL, TERMINATE],
             limit=limit)
 
-    def resume(self, group_names=None, limit=None):
+    def resume(self, group_names=None, limit=None, worker_name=None):
         """Wakes a worker up (it will be able to process queued tasks)"""
         self.set_worker_status(
             group_names=group_names,
@@ -1142,7 +1231,7 @@ class Scheduler(MetaScheduler):
             exclude=[KILL, TERMINATE],
             limit=limit)
 
-    def terminate(self, group_names=None, limit=None):
+    def terminate(self, group_names=None, limit=None, worker_name=None):
         """Sets TERMINATE as worker status. The worker will wait for any
         currently running tasks to be executed and then it will exit gracefully
         """
@@ -1152,7 +1241,7 @@ class Scheduler(MetaScheduler):
             exclude=[KILL],
             limit=limit)
 
-    def kill(self, group_names=None, limit=None):
+    def kill(self, group_names=None, limit=None, worker_name=None):
         """Sets KILL as worker status. The worker will be killed even if it's
         processing a task."""
         self.set_worker_status(
@@ -1227,9 +1316,9 @@ class Scheduler(MetaScheduler):
             have all fields == None
 
         """
-        from gluon.dal import Query
+        from gluon.dal.objects import Query
         sr, st = self.db.scheduler_run, self.db.scheduler_task
-        if isinstance(ref, int):
+        if isinstance(ref, (int, long)):
             q = st.id == ref
         elif isinstance(ref, str):
             q = st.uuid == ref
@@ -1280,7 +1369,7 @@ class Scheduler(MetaScheduler):
             Experimental
         """
         st, sw = self.db.scheduler_task, self.db.scheduler_worker
-        if isinstance(ref, int):
+        if isinstance(ref, (int, long)):
             q = st.id == ref
         elif isinstance(ref, str):
             q = st.uuid == ref
@@ -1301,6 +1390,29 @@ class Scheduler(MetaScheduler):
                 enabled=False,
                 status=STOPPED)
         return rtn
+
+    def get_workers(self, only_ticker=False):
+        """ Returns a dict holding `worker_name : {**columns}`
+        representing all "registered" workers
+        only_ticker returns only the workers running as a TICKER,
+        if there are any
+        """
+        db = self.db
+        if only_ticker:
+            workers = db(db.scheduler_worker.is_ticker == True).select()
+        else:
+            workers = db(db.scheduler_worker.id > 0).select()
+        all_workers = {}
+        for row in workers:
+            all_workers[row.worker_name] = Storage(
+                status=row.status,
+                first_heartbeat=row.first_heartbeat,
+                last_heartbeat=row.last_heartbeat,
+                group_names=row.group_names,
+                is_ticker=row.is_ticker,
+                worker_stats=row.worker_stats
+            )
+        return all_workers
 
 
 def main():

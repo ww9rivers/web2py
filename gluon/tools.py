@@ -11,10 +11,14 @@ Auth, Mail, PluginManager and various utilities
 """
 
 import base64
-import cPickle
+try:
+    import cPickle as pickle
+except:
+    import pickle
 import datetime
 import thread
 import logging
+import copy
 import sys
 import glob
 import os
@@ -39,7 +43,7 @@ from gluon import *
 from gluon.contrib.autolinks import expand_one
 from gluon.contrib.markmin.markmin2html import \
     replace_at_urls, replace_autolinks, replace_components
-from gluon.dal import Row, Set, Query
+from gluon.dal.objects import Table, Row, Set, Query
 
 import gluon.serializers as serializers
 
@@ -55,7 +59,7 @@ except ImportError:
         import gluon.contrib.simplejson as json_parser
 
 __all__ = ['Mail', 'Auth', 'Recaptcha', 'Crud', 'Service', 'Wiki',
-           'PluginManager', 'fetch', 'geocode', 'prettydate']
+           'PluginManager', 'fetch', 'geocode', 'reverse_geocode', 'prettydate']
 
 ### mind there are two loggers here (logger and crud.settings.logger)!
 logger = logging.getLogger("web2py")
@@ -948,7 +952,7 @@ class Recaptcha(DIV):
             captcha.append(DIV(self.errors['captcha'], _class='error'))
             return XML(captcha).xml()
 
-
+# this should only be used for catcha and perhaps not even for that
 def addrow(form, a, b, c, style, _id, position=-1):
     if style == "divs":
         form[0].insert(position, DIV(DIV(LABEL(a), _class='w2p_fl'),
@@ -992,6 +996,7 @@ class Auth(object):
         everybody_group_id=None,
         manager_actions={},
         auth_manager_role=None,
+        two_factor_authentication_group = None,
         login_captcha=None,
         register_captcha=None,
         pre_registration_div=None,
@@ -1006,7 +1011,7 @@ class Auth(object):
         allow_basic_login=False,
         allow_basic_login_only=False,
         on_failed_authentication=lambda x: redirect(x),
-        formstyle="table3cols",
+        formstyle=None,
         label_separator=": ",
         logging_enabled = True,
         allow_delete_accounts=False,
@@ -1045,8 +1050,8 @@ class Auth(object):
     )
         # ## these are messages that can be customized
     default_messages = dict(
-        login_button='Login',
-        register_button='Register',
+        login_button='Log In',
+        register_button='Sign Up',
         password_reset_button='Request reset password',
         password_change_button='Change password',
         profile_save_button='Apply changes',
@@ -1341,6 +1346,7 @@ class Auth(object):
             reset_password_onvalidation = [],
             reset_password_onaccept = [],
             hmac_key = hmac_key,
+            formstyle = current.response.formstyle,            
         )
         settings.lock_keys = True
 
@@ -1359,7 +1365,7 @@ class Auth(object):
 
         # for "remember me" option
         response = current.response
-        if auth and auth.remember:
+        if auth and auth.remember_me:
             # when user wants to be logged in for longer
             response.session_cookie_expires = auth.expiration
         if signature:
@@ -1481,7 +1487,7 @@ class Auth(object):
 
         if self.user_id:  # User is logged in
             logout_next = self.settings.logout_next
-            items.append({'name': T('Logout'),
+            items.append({'name': T('Log Out'),
                           'href': '%s/logout?_next=%s' % (action,
                                                           urllib.quote(
                                                           logout_next)),
@@ -1505,10 +1511,10 @@ class Auth(object):
             if not user_identifier:
                 user_identifier = ''
         else:  # User is not logged in
-            items.append({'name': T('Login'), 'href': href('login'),
+            items.append({'name': T('Log In'), 'href': href('login'),
                           'icon': 'icon-off'})
             if not 'register' in self.settings.actions_disabled:
-                items.append({'name': T('Register'), 'href': href('register'),
+                items.append({'name': T('Sign Up'), 'href': href('register'),
                               'icon': 'icon-user'})
             if not 'request_reset_password' in self.settings.actions_disabled:
                 items.append({'name': T('Lost password?'),
@@ -1538,10 +1544,12 @@ class Auth(object):
                                            _href=item['href'])))
             self.bar.insert(-1, LI('', _class='divider'))
             if self.user_id:
-                self.bar = LI(Anr(prefix, user_identifier, _href='#'),
+                self.bar = LI(Anr(prefix, user_identifier,
+                                  _href='#',_class="dropdown-toggle",
+                                  data={'toggle':'dropdown'}),
                               self.bar,_class='dropdown')
             else:
-                self.bar = LI(Anr(T('Login'),
+                self.bar = LI(Anr(T('Log In'),
                                   _href='#',_class="dropdown-toggle",
                                   data={'toggle':'dropdown'}), self.bar,
                               _class='dropdown')
@@ -1608,15 +1616,15 @@ class Auth(object):
             bare['user'] = user_identifier if self.user_id else None
 
             for i in items:
-                if i['name'] == T('Login'):
+                if i['name'] == T('Log In'):
                     k = 'login'
-                elif i['name'] == T('Register'):
+                elif i['name'] == T('Sign Up'):
                     k = 'register'
                 elif i['name'] == T('Lost password?'):
                     k = 'request_reset_password'
                 elif i['name'] == T('Forgot username?'):
                     k = 'retrieve_username'
-                elif i['name'] == T('Logout'):
+                elif i['name'] == T('Log Out'):
                     k = 'logout'
                 elif i['name'] == T('Profile'):
                     k = 'profile'
@@ -1724,7 +1732,7 @@ class Auth(object):
             except:
                 return id
         ondelete = self.settings.ondelete
-        self.signature = db.Table(
+        self.signature = Table(
             self.db, 'auth_signature',
             Field('is_active', 'boolean',
                   default=True,
@@ -1780,7 +1788,7 @@ class Auth(object):
             signature_list = [self.signature]
         elif not signature:
             signature_list = []
-        elif isinstance(signature, self.db.Table):
+        elif isinstance(signature, Table):
             signature_list = [signature]
         else:
             signature_list = signature
@@ -2176,15 +2184,14 @@ class Auth(object):
         elif not fields.get(settings.userfield):
             raise ValueError("register_bare: " +
                              "userfield not provided or invalid")
-        fields[settings.passfield
-            ] = settings.table_user[settings.passfield].validate(
-                    fields[settings.passfield])[0]
-        user = self.get_or_create_user(fields, login=False,
-                   get=False,
-                   update_fields=self.settings.update_fields)
+        fields[settings.passfield] = \
+            settings.table_user[settings.passfield].validate(
+            fields[settings.passfield])[0]
+        user = self.get_or_create_user(
+            fields, login=False, get=False,
+            update_fields=self.settings.update_fields)
         if not user:
-            # get or create did not create a user (it ignores
-            # duplicate records)
+            # get or create did not create a user (it ignores duplicate records)
             return False
         return user
 
@@ -2283,16 +2290,16 @@ class Auth(object):
                         _code='INVALID TICKET'))
         raise HTTP(200, message)
 
-    def _reset_2_factor_auth(self, session):
+    def _reset_two_factor_auth(self, session):
         '''When two-step authentication is enabled, this function is used to
         clear the session after successfully completing second challenge
         or when the maximum number of tries allowed has expired.
         '''
-        session.auth_2_factor_user = None
-        session.auth_2_factor = None
-        session.auth_2_factor_enabled = False
+        session.auth_two_factor_user = None
+        session.auth_two_factor = None
+        session.auth_two_factor_enabled = False
         # Allow up to 4 attempts (the 1st one plus 3 more)
-        session.auth_2_factor_tries_left = 3
+        session.auth_two_factor_tries_left = 3
 
     def login(
         self,
@@ -2381,12 +2388,12 @@ class Auth(object):
         # If two-factor authentication is enabled, and the maximum
         # number of tries allowed is used up, reset the session to
         # pre-login state with two-factor auth
-        if session.auth_2_factor_enabled and session.auth_2_factor_tries_left < 1:
+        if session.auth_two_factor_enabled and session.auth_two_factor_tries_left < 1:
             # Exceeded maximum allowed tries for this code. Require user to enter
             # username and password again.
             user = None
             accepted_form = False
-            self._reset_2_factor_auth(session)
+            self._reset_two_factor_auth(session)
             # Redirect to the default 'next' page without logging
             # in. If that page requires login, user will be redirected
             # back to the main login form
@@ -2399,7 +2406,15 @@ class Auth(object):
         # Note to devs: The code inside the if-block is unchanged from the
         # previous version of this file, other than for indentation inside
         # to put it inside the if-block
-        if session.auth_2_factor_user is None:
+        if session.auth_two_factor_user is None:
+
+            if settings.remember_me_form:
+                extra_fields = [
+                    Field('remember_me','boolean',default=False,
+                          label = self.messages.label_remember_me)]
+            else:
+                extra_fields = []
+
             # do we use our own login form, or from a central source?
             if settings.login_form == self:
                 form = SQLFORM(
@@ -2410,38 +2425,10 @@ class Auth(object):
                     submit_button=self.messages.login_button,
                     delete_label=self.messages.delete_label,
                     formstyle=settings.formstyle,
-                    separator=settings.label_separator
+                    separator=settings.label_separator,
+                    extra_fields = extra_fields,
                 )
     
-                if settings.remember_me_form:
-                    ## adds a new input checkbox "remember me for longer"
-                    if settings.formstyle != 'bootstrap':
-                        addrow(form, XML("&nbsp;"),
-                               DIV(XML("&nbsp;"),
-                                   INPUT(_type='checkbox',
-                                         _class='checkbox',
-                                         _id="auth_user_remember",
-                                             _name="remember",
-                                         ),
-                                   XML("&nbsp;&nbsp;"),
-                                   LABEL(
-                                   self.messages.label_remember_me,
-                                   _for="auth_user_remember",
-                                   )), "",
-                               settings.formstyle,
-                               'auth_user_remember__row')
-                    elif settings.formstyle == 'bootstrap':
-                        addrow(form,
-                               "",
-                               LABEL(
-                                   INPUT(_type='checkbox',
-                                         _id="auth_user_remember",
-                                         _name="remember"),
-                                   self.messages.label_remember_me,
-                                   _class="checkbox"),
-                               "",
-                               settings.formstyle,
-                               'auth_user_remember__row')
     
                 captcha = settings.login_captcha or \
                     (settings.login_captcha != False and settings.captcha)
@@ -2545,15 +2532,12 @@ class Auth(object):
         # username and password at the first challenge).
         # Check if this user is signed up for two-factor authentication
         # Default rule is that the user must be part of a group that is called
-        # 'web2py Two-Step Authentication'
-        if user:
-            memberships = self.db((self.table_membership().user_id == user.id)
-                                  &(self.table_group().id == self.table_membership().group_id)).select(
-                                                  self.table_group().role)
-            session.auth_2_factor_enabled = 'web2py Two-Step Authentication' in [i.role for i in memberships]
-        # If user is signed up for two-factor authentication, present the second
+        # auth.settings.two_factor_authentication_group
+        if user and self.settings.two_factor_authentication_group:
+            role = self.settings.two_factor_authentication_group
+            session.auth_two_factor_enabled = self.has_membership(user_id=user.id,role=role)
         # challenge
-        if session.auth_2_factor_enabled:
+        if session.auth_two_factor_enabled:
             form = SQLFORM.factory(
                 Field('authentication_code',
                       required=True, 
@@ -2569,43 +2553,43 @@ class Auth(object):
             # Handle the case when a user has submitted the login/password
             # form successfully, and the password has been validated, but
             # the two-factor form has not been displayed or validated yet.
-            if session.auth_2_factor_user is None and user is not None:
-                session.auth_2_factor_user = user # store the validated user and associate with this session
-                session.auth_2_factor = random.randint(100000, 999999)
-                session.auth_2_factor_tries_left = 3 # Allow user to try up to 4 times
+            if session.auth_two_factor_user is None and user is not None:
+                session.auth_two_factor_user = user # store the validated user and associate with this session
+                session.auth_two_factor = random.randint(100000, 999999)
+                session.auth_two_factor_tries_left = 3 # Allow user to try up to 4 times
                 # TODO: Add some error checking to handle cases where email cannot be sent
                 self.settings.mailer.send(
                     to=user.email, 
                     subject="Two-step Login Authentication Code", 
-                    message="Your temporary login code is {0}".format(session.auth_2_factor))
+                    message="Your temporary login code is {0}".format(session.auth_two_factor))
             if form.accepts(request, session if self.csrf_prevention else None,
                             formname='login', dbio=False,
                             onvalidation=onvalidation,
                             hideerror=settings.hideerror):
                 accepted_form = True
-                if form.vars['authentication_code'] == str(session.auth_2_factor):
+                if form.vars['authentication_code'] == str(session.auth_two_factor):
                     # Handle the case when the two-factor form has been successfully validated
                     # and the user was previously stored (the current user should be None because
                     # in this case, the previous username/password login form should not be displayed.
                     # This will allow the code after the 2-factor authentication block to proceed as
                     # normal.
-                    if user is None or user == session.auth_2_factor_user:
-                        user = session.auth_2_factor_user
+                    if user is None or user == session.auth_two_factor_user:
+                        user = session.auth_two_factor_user
                     # For security, because the username stored in the 
                     # session somehow does not match the just validated
                     # user. Should not be possible without session stealing
                     # which is hard with SSL.
-                    elif user != session.auth_2_factor_user:
+                    elif user != session.auth_two_factor_user:
                         user = None
                     # Either way, the user and code associated with this session should
                     # be removed. This handles cases where the session login may have 
                     # expired but browser window is open, so the old session key and 
                     # session usernamem will still exist
-                    self._reset_2_factor_auth(session)
+                    self._reset_two_factor_auth(session)
                 else:
                     # TODO: Limit the number of retries allowed.
-                    response.flash = 'Incorrect code. {0} more attempt(s) remaining.'.format(session.auth_2_factor_tries_left)
-                    session.auth_2_factor_tries_left -= 1
+                    response.flash = 'Incorrect code. {0} more attempt(s) remaining.'.format(session.auth_two_factor_tries_left)
+                    session.auth_two_factor_tries_left -= 1
                     return form
             else:
                 return form
@@ -2618,10 +2602,10 @@ class Auth(object):
             # user wants to be logged in for longer
             self.login_user(user)
             session.auth.expiration = \
-                request.vars.get('remember', False) and \
+                request.post_vars.remember_me and \
                 settings.long_expiration or \
                 settings.expiration
-            session.auth.remember = 'remember' in request.vars
+            session.auth.remember_me = 'remember_me' in request.post_vars
             self.log_event(log, user)
             session.flash = self.messages.logged_in
 
@@ -2650,7 +2634,7 @@ class Auth(object):
         
         # Clear out 2-step authentication information if user logs
         # out. This information is also cleared on successful login.
-        self._reset_2_factor_auth(current.session)
+        self._reset_two_factor_auth(current.session)
         
         if next is DEFAULT:
             next = self.get_vars_next() or self.settings.logout_next
@@ -2727,6 +2711,14 @@ class Auth(object):
 
         passfield = self.settings.password_field
         formstyle = self.settings.formstyle
+        if self.settings.register_verify_password:
+            extra_fields = [
+                Field("password_two", "password", requires=IS_EQUAL_TO(
+                        request.post_vars.get(passfield,None),
+                        error_message=self.messages.mismatched_password),
+                        label=current.T("Confirm Password"))]
+        else:
+            extra_fields = []
         form = SQLFORM(table_user,
                        fields=self.settings.register_fields,
                        hidden=dict(_next=next),
@@ -2734,33 +2726,10 @@ class Auth(object):
                        submit_button=self.messages.register_button,
                        delete_label=self.messages.delete_label,
                        formstyle=formstyle,
-                       separator=self.settings.label_separator
+                       separator=self.settings.label_separator,
+                       extra_fields = extra_fields
                        )
-        if self.settings.register_verify_password:
-            for i, row in enumerate(form[0].components):
-                item = row.element('input', _name=passfield)
-                if item:
-                    form.custom.widget.password_two = \
-                        INPUT(_name="password_two", _type="password",
-                              _class="password",
-                              requires=IS_EXPR(
-                              'value==%s' %
-                              repr(request.vars.get(passfield, None)),
-                              error_message=self.messages.mismatched_password))
 
-                    if formstyle == 'bootstrap':
-                        form.custom.widget.password_two[
-                            '_class'] = 'span4'
-
-                    addrow(
-                        form, self.messages.verify_password +
-                        self.settings.label_separator,
-                        form.custom.widget.password_two,
-                        self.messages.verify_password_comment,
-                           formstyle,
-                           '%s_%s__row' % (table_user, 'password_two'),
-                           position=i + 1)
-                    break
         captcha = self.settings.register_captcha or self.settings.captcha
         if captcha:
             addrow(form, captcha.label, captcha,
@@ -2817,6 +2786,7 @@ class Auth(object):
             else:
                 next = replace_id(next, form)
             redirect(next, client_side=self.settings.client_side)
+        
         return form
 
     def is_logged_in(self):
@@ -3043,15 +3013,13 @@ class Auth(object):
 
         if self.settings.prevent_password_reset_attacks:
             key = request.vars.key
-            if not key and len(request.args)>1:
-                key = request.args[-1]
             if key:
                 session._reset_password_key = key
                 redirect(self.url(args='reset_password'))
             else:
                 key = session._reset_password_key
         else:
-            key = request.vars.key or getarg(-1)
+            key = request.vars.key
         try:
             t0 = int(key.split('-')[0])
             if time.time() - t0 > 60 * 60 * 24:
@@ -3170,7 +3138,7 @@ class Auth(object):
     def email_reset_password(self, user):
         reset_password_key = str(int(time.time())) + '-' + web2py_uuid()
         link = self.url(self.settings.function,
-                        args=('reset_password', reset_password_key),
+                        args=('reset_password',), vars={'key': reset_password_key},
                         scheme=True)
         d = dict(user)
         d.update(dict(key=reset_password_key, link=link))
@@ -3223,10 +3191,15 @@ class Auth(object):
         if log is DEFAULT:
             log = self.messages['change_password_log']
         passfield = self.settings.password_field
+        requires = table_user[passfield].requires
+        if not isinstance(requires,(list, tuple)): 
+            requires = [requires]
+        requires = filter(lambda t:isinstance(t,CRYPT), requires)
+        if requires:
+            requires[0].min_length = 0        
         form = SQLFORM.factory(
-            Field('old_password', 'password',
-                label=self.messages.old_password,
-                requires=table_user[passfield].requires),
+            Field('old_password', 'password', requires=requires,
+                label=self.messages.old_password),
             Field('new_password', 'password',
                 label=self.messages.new_password,
                 requires=table_user[passfield].requires),
@@ -3245,7 +3218,8 @@ class Auth(object):
                         onvalidation=onvalidation,
                         hideerror=self.settings.hideerror):
 
-            if not form.vars['old_password'] == s.select(limitby=(0,1), orderby_on_limitby=False).first()[passfield]:
+            current_user = s.select(limitby=(0,1), orderby_on_limitby=False).first()
+            if not form.vars['old_password'] == current_user[passfield]:
                 form.errors['old_password'] = self.messages.invalid_password
             else:
                 d = {passfield: str(form.vars.new_password)}
@@ -3359,7 +3333,7 @@ class Auth(object):
             user = table_user(user_id)
             if not user:
                 raise HTTP(401, "Not Authorized")
-            auth.impersonator = cPickle.dumps(session)
+            auth.impersonator = pickle.dumps(session, pickle.HIGHEST_PROTOCOL)
             auth.user.update(
                 table_user._filter_fields(user, True))
             self.user = auth.user
@@ -3370,7 +3344,7 @@ class Auth(object):
         elif user_id in (0, '0'):
             if self.is_impersonating():
                 session.clear()
-                session.update(cPickle.loads(auth.impersonator))
+                session.update(pickle.loads(auth.impersonator))
                 self.user = session.auth.user
                 self.update_groups()
                 self.run_login_onaccept()
@@ -4031,10 +4005,10 @@ class Crud(object):
         formname=DEFAULT,
         **attributes
         ):
-        if not (isinstance(table, self.db.Table) or table in self.db.tables) \
+        if not (isinstance(table, Table) or table in self.db.tables) \
                 or (isinstance(record, str) and not str(record).isdigit()):
             raise HTTP(404)
-        if not isinstance(table, self.db.Table):
+        if not isinstance(table, Table):
             table = self.db[table]
         try:
             record_id = record.id
@@ -4165,10 +4139,10 @@ class Crud(object):
             )
 
     def read(self, table, record):
-        if not (isinstance(table, self.db.Table) or table in self.db.tables) \
+        if not (isinstance(table, Table) or table in self.db.tables) \
                 or (isinstance(record, str) and not str(record).isdigit()):
             raise HTTP(404)
-        if not isinstance(table, self.db.Table):
+        if not isinstance(table, Table):
             table = self.db[table]
         if not self.has_permission('read', table, record):
             redirect(self.settings.auth.settings.on_failed_authorization)
@@ -4193,9 +4167,9 @@ class Crud(object):
         next=DEFAULT,
         message=DEFAULT,
         ):
-        if not (isinstance(table, self.db.Table) or table in self.db.tables):
+        if not (isinstance(table, Table) or table in self.db.tables):
             raise HTTP(404)
-        if not isinstance(table, self.db.Table):
+        if not isinstance(table, Table):
             table = self.db[table]
         if not self.has_permission('delete', table, record_id):
             redirect(self.settings.auth.settings.on_failed_authorization)
@@ -4223,13 +4197,13 @@ class Crud(object):
         orderby=None,
         limitby=None,
         ):
-        if not (isinstance(table, self.db.Table) or table in self.db.tables):
+        if not (isinstance(table, Table) or table in self.db.tables):
             raise HTTP(404)
         if not self.has_permission('select', table):
             redirect(self.settings.auth.settings.on_failed_authorization)
         #if record_id and not self.has_permission('select', table):
         #    redirect(self.settings.auth.settings.on_failed_authorization)
-        if not isinstance(table, self.db.Table):
+        if not isinstance(table, Table):
             table = self.db[table]
         if not query:
             query = table.id > 0
@@ -4336,7 +4310,7 @@ class Crud(object):
         validate = args.get('validate',True)
         request = current.request
         db = self.db
-        if not (isinstance(table, db.Table) or table in db.tables):
+        if not (isinstance(table, Table) or table in db.tables):
             raise HTTP(404)
         attributes = {}
         for key in ('orderby', 'groupby', 'left', 'distinct', 'limitby', 'cache'):
@@ -4457,6 +4431,16 @@ def geocode(address):
         return (la, lo)
     except:
         return (0.0, 0.0)
+
+
+def reverse_geocode(lat, lng, lang=None):
+    """ Try to get an approximate address for a given latitude, longitude. """
+    if not lang:
+        lang = current.T.accepted_language
+    try:
+        return json_parser.loads(fetch('http://maps.googleapis.com/maps/api/geocode/json?latlng=%(lat)s,%(lng)s&language=%(lang)s' % locals()))['results'][0]['formatted_address']
+    except:
+        return ''
 
 
 def universal_caller(f, *a, **b):
@@ -5382,8 +5366,11 @@ class Expose(object):
         base = base or os.path.join(current.request.folder, 'static')
         basename = basename or current.request.function
         self.basename = basename
-        self.args = current.request.raw_args and \
-            [arg for arg in current.request.raw_args.split('/') if arg] or []
+        
+        if current.request.raw_args:            
+            self.args = [arg for arg in current.request.raw_args.split('/') if arg]
+        else:
+            self.args = [arg for arg in current.request.args if args]
         filename = os.path.join(base, *self.args)
         if not os.path.exists(filename):
             raise HTTP(404, "FILE NOT FOUND")

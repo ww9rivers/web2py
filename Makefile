@@ -24,28 +24,35 @@ epydoc:
 	cp applications/examples/static/title.png applications/examples/static/epydoc
 tests:
 	python web2py.py --run_system_tests
+coverage:
+	coverage erase --rcfile=gluon/tests/coverage.ini
+	export COVERAGE_PROCESS_START=gluon/tests/coverage.ini
+	python web2py.py --run_system_tests --with_coverage
+	coverage combine --rcfile=gluon/tests/coverage.ini
+	sleep 1
+	coverage html --rcfile=gluon/tests/coverage.ini
 update:
 	wget -O gluon/contrib/feedparser.py http://feedparser.googlecode.com/svn/trunk/feedparser/feedparser.py
 	wget -O gluon/contrib/simplejsonrpc.py http://rad2py.googlecode.com/hg/ide2py/simplejsonrpc.py
 	echo "remember that pymysql was tweaked"
 src:
 	### Use semantic versioning
-	echo 'Version 2.9.5-trunk+timestamp.'`date +%Y.%m.%d.%H.%M.%S` > VERSION
+	echo 'Version 2.10.0-beta+timestamp.'`date +%Y.%m.%d.%H.%M.%S` > VERSION
 	### rm -f all junk files
 	make clean
 	### clean up baisc apps
 	rm -f routes.py 
-	rm -f applications/*/sessions/*
-	rm -f applications/*/errors/* | echo 'too many files'
-	rm -f applications/*/cache/*
-	rm -f applications/admin/databases/*                 
-	rm -f applications/welcome/databases/*               
-	rm -f applications/examples/databases/*             
-	rm -f applications/admin/uploads/*                 
-	rm -f applications/welcome/uploads/*               
-	rm -f applications/examples/uploads/* 
-	### make epydoc
-	make epydoc
+	rm -rf applications/*/sessions/*
+	rm -rf applications/*/errors/* | echo 'too many files'
+	rm -rf applications/*/cache/*
+	rm -rf applications/admin/databases/*                 
+	rm -rf applications/welcome/databases/*               
+	rm -rf applications/examples/databases/*             
+	rm -rf applications/admin/uploads/*                 
+	rm -rf applications/welcome/uploads/*               
+	rm -rf applications/examples/uploads/* 
+	### NO MORE make epydoc
+	# make epydoc
 	### make welcome layout and appadmin the default
 	cp applications/welcome/views/appadmin.html applications/admin/views
 	cp applications/welcome/views/appadmin.html applications/examples/views

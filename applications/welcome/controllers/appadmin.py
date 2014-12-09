@@ -36,7 +36,7 @@ try:
 except:
     hosts = (http_host, )
 
-if request.env.http_x_forwarded_for or request.is_https:
+if request.is_https:
     session.secure()
 elif (remote_addr not in hosts) and (remote_addr != "127.0.0.1"):
     raise HTTP(200, T('appadmin is disabled because insecure channel'))
@@ -71,9 +71,7 @@ def get_databases(request):
             dbs[key] = value
     return dbs
 
-
 databases = get_databases(None)
-
 
 def eval_in_global_env(text):
     exec ('_ret=%s' % text, {}, global_env)
@@ -86,7 +84,6 @@ def get_database(request):
     else:
         session.flash = T('invalid request')
         redirect(URL('index'))
-
 
 def get_table(request):
     db = get_database(request)
@@ -465,34 +462,24 @@ def ccache():
                 if value[0] < ram['oldest']:
                     ram['oldest'] = value[0]
                 ram['keys'].append((key, GetInHMS(time.time() - value[0])))
-        folder = os.path.join(request.folder,'cache')
-        if not os.path.exists(folder):
-            os.mkdir(folder)
-        locker = open(os.path.join(folder, 'cache.lock'), 'a')
-        portalocker.lock(locker, portalocker.LOCK_EX)
-        disk_storage = shelve.open(
-            os.path.join(folder, 'cache.shelve'))
-        try:
-            for key, value in disk_storage.items():
-                if isinstance(value, dict):
-                    disk['hits'] = value['hit_total'] - value['misses']
-                    disk['misses'] = value['misses']
-                    try:
-                        disk['ratio'] = disk['hits'] * 100 / value['hit_total']
-                    except (KeyError, ZeroDivisionError):
-                        disk['ratio'] = 0
-                else:
-                    if hp:
-                        disk['bytes'] += hp.iso(value[1]).size
-                        disk['objects'] += hp.iso(value[1]).count
-                    disk['entries'] += 1
-                    if value[0] < disk['oldest']:
-                        disk['oldest'] = value[0]
-                    disk['keys'].append((key, GetInHMS(time.time() - value[0])))
-        finally:
-            portalocker.unlock(locker)
-            locker.close()
-            disk_storage.close()
+
+        for key in cache.disk.storage:
+            value = cache.disk.storage[key]
+            if isinstance(value, dict):
+                disk['hits'] = value['hit_total'] - value['misses']
+                disk['misses'] = value['misses']
+                try:
+                    disk['ratio'] = disk['hits'] * 100 / value['hit_total']
+                except (KeyError, ZeroDivisionError):
+                    disk['ratio'] = 0
+            else:
+                if hp:
+                    disk['bytes'] += hp.iso(value[1]).size
+                    disk['objects'] += hp.iso(value[1]).count
+                disk['entries'] += 1
+                if value[0] < disk['oldest']:
+                    disk['oldest'] = value[0]
+                disk['keys'].append((key, GetInHMS(time.time() - value[0])))
 
         total['entries'] = ram['entries'] + disk['entries']
         total['bytes'] = ram['bytes'] + disk['bytes']
@@ -586,9 +573,15 @@ def bg_graph_model():
         if hasattr(db[tablename],'_meta_graphmodel'):
             meta_graphmodel = db[tablename]._meta_graphmodel
         else:
+<<<<<<< HEAD
             meta_graphmodel = dict(group='Undefined', color='#ECECEC')
         
         group = meta_graphmodel['group'].replace(' ', '') 
+=======
+            meta_graphmodel = dict(group=request.application, color='#ECECEC')
+
+        group = meta_graphmodel['group'].replace(' ', '')
+>>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53
         if not subgraphs.has_key(group):
             subgraphs[group] = dict(meta=meta_graphmodel, tables=[])
             subgraphs[group]['tables'].append(tablename)
@@ -629,3 +622,87 @@ def bg_graph_model():
 
 def graph_model():    
     return dict(databases=databases, pgv=pgv)
+<<<<<<< HEAD
+=======
+
+def manage():
+    tables = manager_action['tables']
+    if isinstance(tables[0], str):
+        db = manager_action.get('db', auth.db)
+        db = globals()[db] if isinstance(db, str) else db
+        tables = [db[table] for table in tables]
+    if request.args(0) == 'auth':
+        auth.table_user()._plural = T('Users')
+        auth.table_group()._plural = T('Roles')
+        auth.table_membership()._plural = T('Memberships')
+        auth.table_permission()._plural = T('Permissions')
+    if request.extension != 'load':
+        return dict(heading=manager_action.get('heading',
+                    T('Manage %(action)s') % dict(action=request.args(0).replace('_', ' ').title())),
+                    tablenames=[table._tablename for table in tables],
+                    labels=[table._plural.title() for table in tables])
+
+    table = tables[request.args(1, cast=int)]
+    formname = '%s_grid' % table._tablename
+    linked_tables = orderby = None
+    if request.args(0) == 'auth':
+        auth.table_group()._id.readable = \
+        auth.table_membership()._id.readable = \
+        auth.table_permission()._id.readable = False
+        auth.table_membership().user_id.label = T('User')
+        auth.table_membership().group_id.label = T('Role')
+        auth.table_permission().group_id.label = T('Role')
+        auth.table_permission().name.label = T('Permission')
+        if table == auth.table_user():
+            linked_tables=[auth.settings.table_membership_name]
+        elif table == auth.table_group():
+            orderby = 'role' if not request.args(3) or '.group_id' not in request.args(3) else None
+        elif table == auth.table_permission():
+            orderby = 'group_id'
+    kwargs = dict(user_signature=True, maxtextlength=1000,
+                  orderby=orderby, linked_tables=linked_tables)
+    smartgrid_args = manager_action.get('smartgrid_args', {})
+    kwargs.update(**smartgrid_args.get('DEFAULT', {}))
+    kwargs.update(**smartgrid_args.get(table._tablename, {}))
+    grid = SQLFORM.smartgrid(table, args=request.args[:2], formname=formname, **kwargs)
+    return grid
+
+def hooks():
+    import functools
+    import inspect
+    list_op=['_%s_%s' %(h,m) for h in ['before', 'after'] for m in ['insert','update','delete']]
+    tables=[]
+    with_build_it=False
+    for db_str in sorted(databases):
+        db = databases[db_str]
+        for t in db.tables:
+            method_hooks=[]
+            for op in list_op:
+                functions = []
+                for f in getattr(db[t], op):
+                    if hasattr(f, '__call__'):
+                        if isinstance(f, (functools.partial)):
+                            f = f.func
+                        filename = inspect.getsourcefile(f)
+                        details = {'funcname':f.__name__,
+                                   'filename':filename[len(request.folder):] if request.folder in filename else None,
+                                   'lineno': inspect.getsourcelines(f)[1]}
+                        if details['filename']: # Built in functions as delete_uploaded_files are not editable
+                            details['url'] = URL(a='admin',c='default',f='edit', args=[request['application'], details['filename']],vars={'lineno':details['lineno']})
+                        if details['filename'] or with_build_it:
+                            functions.append(details)
+                if len(functions):
+                    method_hooks.append({'name':op, 'functions':functions})
+            if len(method_hooks):
+                tables.append({'name':"%s.%s" % (db_str,t), 'slug': IS_SLUG()("%s.%s" % (db_str,t))[0], 'method_hooks':method_hooks})
+    # Render
+    ul_main = UL(_class='nav nav-list')
+    for t in tables:
+        ul_main.append(A(t['name'], _onclick="collapse('a_%s')" % t['slug']))
+        ul_t = UL(_class='nav nav-list', _id="a_%s" % t['slug'], _style='display:none')
+        for op in t['method_hooks']:
+            ul_t.append(LI (op['name']))
+            ul_t.append(UL([LI(A(f['funcname'], _class="editor_filelink", _href=f['url']if 'url' in f else None, **{'_data-lineno':f['lineno']-1})) for f in op['functions']]))
+        ul_main.append(ul_t)
+    return ul_main
+>>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53
