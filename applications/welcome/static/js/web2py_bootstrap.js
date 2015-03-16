@@ -33,10 +33,21 @@ jQuery(function(){
   }
   hoverMenu(); // first page load
   jQuery(window).resize(hoverMenu); // on resize event
+<<<<<<< HEAD
   jQuery('ul.nav li.dropdown a').click(function(){window.location=jQuery(this).attr('href');});
 <<<<<<< HEAD
   // make all buttons bootstrap buttons
   jQuery('button, form input[type="submit"], form input[type="button"]').addClass('btn');
 =======
 >>>>>>> 4cbdf612af9e9c992e99c6c9e60e2170e4deb853
+=======
+    jQuery('ul.nav li.dropdown a').click(function(event){
+      event.stopProgpagation();
+      if(event.originalEvent.ctrlKey){
+          window.open(jQuery(this).attr('href'), "_blank");
+      } else {
+          window.location.href=jQuery(this).attr('href');
+          }
+      });
+>>>>>>> 7bfa85fa10beebb3cae82516de28a7371c74b6cb
 });
