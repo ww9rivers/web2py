@@ -6,7 +6,6 @@
 ## - index is the default action of any application
 ## - user is required for authentication and authorization
 ## - download is for downloading files uploaded in the db (does streaming)
-## - api is an example of Hypermedia API support and access control
 #########################################################################
 
 def index():
@@ -17,11 +16,17 @@ def index():
     if you need a simple wiki simply replace the two lines below with:
     return auth.wiki()
     """
+<<<<<<< HEAD:applications/sis2py/controllers/default.py
     html = P(SPAN('The home page main content is still being developed. Please '),
              SPAN(''  if auth.is_logged_in() else [A('login', _href=URL('user/login')), ' and ']),
              SPAN('try other menu entries.'))
     return dict(message=T('School Information System'),
                 main_content=html)
+=======
+    response.flash = T("Hello World")
+    return dict(message=T('Welcome to web2py!'))
+
+>>>>>>> 1e66fa3a93560aa5d32c27a6b1b7251e0dd8a428:applications/welcome/controllers/default.py
 
 def user():
     """
@@ -63,6 +68,7 @@ def call():
     return service()
 
 
+<<<<<<< HEAD:applications/sis2py/controllers/default.py
 @auth.requires_login() 
 def api():
     """
@@ -88,3 +94,5 @@ def api():
         '<tablename>': {'GET':{},'POST':{},'PUT':{},'DELETE':{}},
         }
     return Collection(db).process(request,response,rules)
+=======
+>>>>>>> 1e66fa3a93560aa5d32c27a6b1b7251e0dd8a428:applications/welcome/controllers/default.py

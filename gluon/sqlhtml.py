@@ -31,7 +31,6 @@ from pydal.objects import Table, Row, Expression, Field
 from pydal.adapters.base import CALLABLETYPES
 from pydal.helpers.methods import smart_query, bar_encode
 from pydal.helpers.classes import Reference, SQLCustomType
-from gluon.dal import _default_validators
 from gluon.storage import Storage
 from gluon.utils import md5_hash
 from gluon.validators import IS_EMPTY_OR, IS_NOT_EMPTY, IS_LIST_OF, IS_DATE
@@ -59,9 +58,12 @@ def represent(field, value, record):
     f = field.represent
     if not callable(f):
         return str(value)
-    n = f.func_code.co_argcount - len(f.func_defaults or [])
-    if getattr(f, 'im_self', None):
-        n -= 1
+    if hasattr(f,'func_code'):
+        n = f.func_code.co_argcount - len(f.func_defaults or [])
+        if getattr(f, 'im_self', None):
+            n -= 1
+    else:
+        n = 1
     if n == 1:
         return f(value)
     elif n == 2:
@@ -903,7 +905,7 @@ def formstyle_bootstrap3_inline_factory(col_label_size=3):
                     label['_for'] = None
                     label.insert(0, controls)
                     _controls = DIV(DIV(label, _help, _class="checkbox"),
-                        _class="%s %s" % (offset_class, col_class))
+                                    _class="%s %s" % (offset_class, col_class))
                     label = ''
                 elif isinstance(controls, (SELECT, TEXTAREA)):
                     controls.add_class('form-control')
@@ -1130,8 +1132,8 @@ class SQLFORM(FORM):
             extra_field.table = table
             extra_field.tablename = table._tablename
             if extra_field.requires == DEFAULT:
-                extra_field.requires = _default_validators(table._db,
-                                                           extra_field)
+                from gluon.dal import _default_validators
+                extra_field.requires = _default_validators(table._db, extra_field)
 
         for fieldname in self.fields:
             if fieldname.find('.') >= 0:
@@ -1206,6 +1208,9 @@ class SQLFORM(FORM):
                 elif field.type == 'boolean':
                     inp = self.widgets.boolean.widget(
                         field, default, _disabled=True)
+                elif isinstance(field.type, SQLCustomType) and callable(field.type.represent):
+                    # SQLCustomType has a represent, use it
+                    inp = field.type.represent(default, record)
                 else:
                     inp = field.formatter(default)
                 if getattr(field, 'show_if', None):
@@ -1247,6 +1252,9 @@ class SQLFORM(FORM):
                     dspval = ''
             elif field.type == 'blob':
                 continue
+            elif isinstance(field.type, SQLCustomType) and callable(field.type.widget):
+                # SQLCustomType has a widget, use it
+                inp = field.type.widget(field, default)
             else:
                 field_type = widget_class.match(str(field.type)).group()
                 field_type = field_type in self.widgets and field_type or 'string'
@@ -1590,7 +1598,7 @@ class SQLFORM(FORM):
                         (cStringIO.StringIO(f), 'file.txt')
                 else:
                     # this should never happen, why does it happen?
-                    # print 'f=',repr(f)
+                    # print 'f=', repr(f)
                     continue
                 newfilename = field.store(source_file, original_filename,
                                           field.uploadfolder)
@@ -1827,16 +1835,16 @@ class SQLFORM(FORM):
                 else:
                     field_type = field.type
 
-                operators = SELECT(*[OPTION(T(option), _value=option) for option in options],_class='form-control')
+                operators = SELECT(*[OPTION(T(option), _value=option) for option in options], _class='form-control')
                 _id = "%s_%s" % (value_id, name)
                 if field_type in ['boolean', 'double', 'time', 'integer']:
-                    value_input = SQLFORM.widgets[field_type].widget(field, field.default, _id=_id,_class='form-control')
+                    value_input = SQLFORM.widgets[field_type].widget(field, field.default, _id=_id, _class='form-control')
                 elif field_type == 'date':
                     iso_format = {'_data-w2p_date_format' : '%Y-%m-%d'}
-                    value_input = SQLFORM.widgets.date.widget(field, field.default, _id=_id,_class='form-control', **iso_format)
+                    value_input = SQLFORM.widgets.date.widget(field, field.default, _id=_id, _class='form-control', **iso_format)
                 elif field_type == 'datetime':
                     iso_format = {'_data-w2p_datetime_format' : '%Y-%m-%d %H:%M:%S'}
-                    value_input = SQLFORM.widgets.datetime.widget(field, field.default, _id=_id,_class='form-control', **iso_format)
+                    value_input = SQLFORM.widgets.datetime.widget(field, field.default, _id=_id, _class='form-control', **iso_format)
                 elif (field_type.startswith('reference ') or
                       field_type.startswith('list:reference ')) and \
                       hasattr(field.requires, 'options'):
@@ -1848,7 +1856,7 @@ class SQLFORM(FORM):
                 elif field_type.startswith('reference ') or \
                      field_type.startswith('list:integer') or \
                      field_type.startswith('list:reference '):
-                    value_input = SQLFORM.widgets.integer.widget(field, field.default, _id=_id,_class='form-control')
+                    value_input = SQLFORM.widgets.integer.widget(field, field.default, _id=_id, _class='form-control')
                 else:
                     value_input = INPUT(
                         _type='text', _id=_id,
@@ -1958,7 +1966,9 @@ class SQLFORM(FORM):
              noconfirm=False,
              cache_count=None,
              client_side_delete=False,
-             ignore_common_filters=None):
+             ignore_common_filters=None,
+             auto_pagination=True,
+             use_cursor=False):
 
         formstyle = formstyle or current.response.formstyle
 
@@ -2040,7 +2050,7 @@ class SQLFORM(FORM):
                     c = 'count(*)'
                     nrows = dbset.select(c, left=left, cacheable=True, cache=cache_count).first()[c]
                 elif dbset._db._adapter.dbengine == 'google:datastore':
-                    #if we don't set a limit, this can timeout for a large table
+                    # if we don't set a limit, this can timeout for a large table
                     nrows = dbset.db._adapter.count(dbset.query, limit=1000)
                 else:
                     nrows = dbset.count(cache=cache_count)
@@ -2051,6 +2061,25 @@ class SQLFORM(FORM):
             else:
                 nrows = 0
             return nrows
+
+        def fix_orderby(orderby):
+            if not auto_pagination:
+                return orderby
+            # enforce always an ORDER clause to avoid
+            # pagination errors. field_id is needed anyhow,
+            # is unique and usually indexed. See issue #679
+            if not orderby:
+                orderby = field_id
+            elif isinstance(orderby, list):
+                orderby = map(lambda a,b: a|b, orderby)
+            elif isinstance(orderby, Field) and orderby is not field_id:
+                # here we're with an ASC order on a field stored as orderby
+                orderby = orderby | field_id
+            elif (isinstance(orderby, Expression) and 
+                  orderby.first and orderby.first is not field_id):
+                # here we're with a DESC order on a field stored as orderby.first
+                orderby = orderby | field_id
+            return orderby
 
         def url(**b):
             b['args'] = args + b.get('args', [])
@@ -2126,7 +2155,7 @@ class SQLFORM(FORM):
         else:
             fields = []
             columns = []
-            filter1 = lambda f: isinstance(f, Field)
+            filter1 = lambda f: isinstance(f, Field) and f.type != 'blob'
             filter2 = lambda f: isinstance(f, Field) and f.readable
             for table in tables:
                 fields += filter(filter1, table)
@@ -2269,20 +2298,20 @@ class SQLFORM(FORM):
                         ondelete(table, request.args[-1])
                     record.delete_record()
             if request.ajax:
-                #this means javascript is enabled, so we don't need to do
-                #a redirect
+                # this means javascript is enabled, so we don't need to do
+                # a redirect
                 if not client_side_delete:
-                    #if it's an ajax request and we don't need to reload the
-                    #entire page, let's just inform that there have been no
-                    #exceptions and don't regenerate the grid
+                    # if it's an ajax request and we don't need to reload the
+                    # entire page, let's just inform that there have been no
+                    # exceptions and don't regenerate the grid
                     raise HTTP(200)
                 else:
-                    #if it's requested that the grid gets reloaded on delete
-                    #on ajax, the redirect should be on the original location
+                    # if it's requested that the grid gets reloaded on delete
+                    # on ajax, the redirect should be on the original location
                     newloc = request.env.http_web2py_component_location
                     redirect(newloc, client_side=client_side_delete)
             else:
-                #we need to do a redirect because javascript is not enabled
+                # we need to do a redirect because javascript is not enabled
                 redirect(referrer, client_side=client_side_delete)
 
         exportManager = dict(
@@ -2312,6 +2341,8 @@ class SQLFORM(FORM):
                         orderby = (order[:1] == '~' and sort_field) or ~sort_field
                     else:
                         orderby = (order[:1] == '~' and ~sort_field) or sort_field
+
+            orderby = fix_orderby(orderby)
 
             expcolumns = [str(f) for f in columns]
             selectable_columns = [str(f) for f in columns if not isinstance(f, Field.Virtual)]
@@ -2509,7 +2540,7 @@ class SQLFORM(FORM):
 
         cursor = True
         # figure out what page we are one to setup the limitby
-        if paginate and dbset._db._adapter.dbengine == 'google:datastore':
+        if paginate and dbset._db._adapter.dbengine == 'google:datastore' and use_cursor:
             cursor = request.vars.cursor or True
             limitby = (0, paginate)
             try:
@@ -2524,11 +2555,14 @@ class SQLFORM(FORM):
             limitby = (paginate * page, paginate * (page + 1))
         else:
             limitby = None
+
+        orderby = fix_orderby(orderby)
+
         try:
             table_fields = [field for field in fields
                             if (field.tablename in tablenames and
                                 not(isinstance(field, Field.Virtual)))]
-            if dbset._db._adapter.dbengine == 'google:datastore':
+            if dbset._db._adapter.dbengine == 'google:datastore' and use_cursor:
                 rows = dbset.select(left=left, orderby=orderby,
                                     groupby=groupby, limitby=limitby,
                                     reusecursor=cursor,
@@ -2538,6 +2572,7 @@ class SQLFORM(FORM):
                 rows = dbset.select(left=left, orderby=orderby,
                                     groupby=groupby, limitby=limitby,
                                     cacheable=True, *table_fields)
+                next_cursor = None
         except SyntaxError:
             rows = None
             next_cursor = None
@@ -2556,7 +2591,7 @@ class SQLFORM(FORM):
         console.append(DIV(message or '', _class='web2py_counter'))
 
         paginator = UL()
-        if paginate and dbset._db._adapter.dbengine == 'google:datastore':
+        if paginate and dbset._db._adapter.dbengine == 'google:datastore' and use_cursor:
             # this means we may have a large table with an unknown number of rows.
             try:
                 page = int(request.vars.page or 1) - 1
@@ -2681,6 +2716,9 @@ class SQLFORM(FORM):
                                           _href='%s/%s' % (upload, value))
                         else:
                             value = ''
+                    elif isinstance(field.type, SQLCustomType) and callable(field.type.represent):
+                        # SQLCustomType has a represent, use it
+                        value = field.type.represent(value, row)
                     if isinstance(value, str):
                         value = truncate_string(value, maxlength)
                     elif not isinstance(value, XmlComponent):
@@ -3054,23 +3092,22 @@ class SQLTABLE(TABLE):
 
     """
 
-    def __init__(
-        self,
-        sqlrows,
-        linkto=None,
-        upload=None,
-        orderby=None,
-        headers={},
-        truncate=16,
-        columns=None,
-        th_link='',
-        extracolumns=None,
-        selectid=None,
-        renderstyle=False,
-        cid=None,
-        colgroup=False,
-        **attributes
-        ):
+    def __init__(self,
+                 sqlrows,
+                 linkto=None,
+                 upload=None,
+                 orderby=None,
+                 headers={},
+                 truncate=16,
+                 columns=None,
+                 th_link='',
+                 extracolumns=None,
+                 selectid=None,
+                 renderstyle=False,
+                 cid=None,
+                 colgroup=False,
+                 **attributes
+                 ):
 
         TABLE.__init__(self, **attributes)
 
