@@ -13,7 +13,7 @@
 	"exchange": {
 		"label": "UMHS Exchange",
 		"link": "/midash/default/view?app=umhs-exchange",
-		"description": "The <a class='link' href='%(link)s'>Alerts Dashboard</a> contains a list of the alerts that have been generated from SiteScope and InterMapper. It is used for manual escalation of EOC systems alerts. Status categories are red, yellow, and green. The Report for this dashboard lists the escalations that have been performed by the Service Desk."
+		"description": "The <a class='link' href='%(link)s'>%(label)s</a> is a group of dashboards showing Exchage status and service performance."
 	},
 	"dashboards": {
 		"label": "Service Desk Dashboard",
@@ -59,7 +59,7 @@
 },
 "02": {
 	"label":	"Tools",
-	"keys": [ "majorincident", "opstatus" ],
+	"keys": [ "majorincident", "opstatus", "research" , "uncategorized" , "video" , "facilities" , "medical" ],
 	"majorincident": {
 		"label": "Major Incident",
 		"link": "/MajorIncident/",
@@ -69,6 +69,31 @@
 		"label": "Operational Status",
 		"link": "/OperationalStatus/status.jsp",
 		"description": "The <a class='link' href='%(link)s'>Operational Status</a> tool contains a list of service groups for ISO, and lists a status related to the current health of the service. Status categories are <span style='background:red'>&nbsp;red </span>, <span style='background:yellow'>&nbsp;yellow </span>, and <span style='background:green'>&nbsp;green </span>.<br/><br/><a target='miops-docs' href='https://i.med.umich.edu/sites/MCIT/iso/sp/eMpF WiKi/Operational Status User Documents.aspx'>Documentation for this tool</a> may be found in SharePoint."
+	},
+	"research": {
+		"label": "Research Device Inventory",
+		"link": "/Inventory/dashboard.php",
+		"description": "The <a class='link' href='%(link)s'>Research Device Inventory</a> tool provides an interface to identify unknown devices."
+	},
+	"uncategorized": {
+		"label": "Uncategorized Device Inventory",
+		"link": "/Inventory/uncategorized/dashboard.php",
+		"description": "The <a class='link' href='%(link)s'>Uncategorized Device Inventory</a> tool provides an interface to identify uncategorized devices."
+	},
+	"video": {
+		"label": "Video Conferencing Device Inventory",
+		"link": "/video/dashboard.php",
+		"description": "The <a class='link' href='%(link)s'>Video Conferencing Device Inventory</a> tool provides an interface to manage the video conferencing device inventory."
+	},
+	"facilities": {
+		"label": "Facilities Device Inventory",
+		"link": "/facilities/dashboard.php",
+		"description": "The <a class='link' href='%(link)s'>Facilities Device Inventory</a> tool provides an interface to manage the facilities device inventory."
+	},
+	"medical": {
+		"label": "Medical Device Inventory",
+		"link": "/pathology/dashboard.php",
+		"description": "The <a class='link' href='%(link)s'>Medical Device Inventory</a> tool provides an interface to manage the medical device inventory."
 	}
 },
 "03": {
