@@ -1,0 +1,20 @@
+{
+"Dashboards": {
+	"keys": [ "dashboards", "opstatus", "servicedesk" ],
+	"dashboards": {
+		"label": "Service Desk Dashboard",
+		"link": "/midash",
+		"description": "The <a class='link' href='%(link)s'>%(label)s</a> is an enterprise dashboard that provides information about the current operational activity for the Service Desk, including Rockwell call volumes, Remedy tickets, and current Major Incidents. The dashboard provides two views, one that contains a summary of the current day, and one that contains \"near-time\" data for current levels."
+	},
+	"opstatus": {
+		"label": "Operational Status - ISO",
+		"link": "/OperationalStatus/status.jsp",
+		"description": "The <a class='link' href='%(link)s'>Operational Status Dashboard</a> contains a list of service groups for ISO, and lists a status related to the current health of the service. Status categories are red, yellow, and green.<br/><br/>"
+	},
+	"servicedesk": {
+		"label": "Alerts Dashboard | Report",
+		"link": "http://alertmon.mcit.med.umich.edu:8080/Dashboard/alert.jsp",
+		"description": "The <a class='link' href='%(link)s'>Alerts Dashboard</a> contains a list of the alerts that have been generated from SiteScope and InterMapper. It is used for manual escalation of EOC systems alerts. Status categories are red, yellow, and green. The Report for this dashboard lists the escalations that have been performed by the Service Desk."
+	}
+}
+}

@@ -1,0 +1,82 @@
+{
+"01": {
+	"label":	"Dashboards",
+	"keys": [ "exchange", "dashboards", "mcit-iso-linux", "mcit-michart", "mcit-iso-nss", "mcit-iso-tsm", "mcit-omt-huddle", "servicedesk",
+		"datacenterinventory" ],
+
+	"datacenterinventory": {
+		"label":	"Data Center Inventory Connections",
+		"link":		"/midash/default/view?app=datacenterinventory",
+		"description": "The <a class='link' href='%(link)s'>Data Center Inventory Connections Information</a> dashboard shows current status of inventorying devices found connected on the data center networks."
+	},
+
+	"exchange": {
+		"label": "UMHS Exchange",
+		"link": "/midash/default/view?app=umhs-exchange",
+		"description": "The <a class='link' href='%(link)s'>Alerts Dashboard</a> contains a list of the alerts that have been generated from SiteScope and InterMapper. It is used for manual escalation of EOC systems alerts. Status categories are red, yellow, and green. The Report for this dashboard lists the escalations that have been performed by the Service Desk."
+	},
+	"dashboards": {
+		"label": "Service Desk Dashboard",
+		"link": "/midash/default/view?app=mcitservicedesk",
+		"description": "The <a class='link' href='%(link)s'>%(label)s</a> is an enterprise dashboard that provides information about the current operational activity for the Service Desk, including Rockwell call volumes, Remedy tickets, and current Major Incidents. The dashboard provides two views, one that contains a summary of the current day, and one that contains \"near-time\" data for current levels."
+	},
+
+	"mcit-iso-linux": {
+		"label": "Linux Hosts and Services",
+		"link": "/midash/default/view/?app=mcit-iso-linux",
+		"description": "The <a class='link' href='%(link)s'>%(label)s</a> is a group of dashboards showing Linux host status and service performance."
+	},
+
+	"mcit-michart": {
+		"label": "MiChart Today",
+		"link": "/midash/default/view/?app=mcit-michart",
+		"description": "The <a class='link' href='%(link)s'>%(label)s</a> is a dashboard with KPIs measuring MiChart system performance during the current day."
+	},
+
+	"mcit-iso-nss": {
+		"label": "Network Devices",
+		"link": "/midash/default/view/?app=mcit-iso-nss",
+		"description": "The <a class='link' href='%(link)s'>%(label)s</a> is a dashboard showing statistics about devices on the UMHS networks."
+	},
+
+	"mcit-iso-tsm": {
+		"label": "TSM Status Summary",
+		"link": "/midash/default/view/?app=mcit-iso-tsm",
+		"description": "The <a class='link' href='%(link)s'>%(label)s</a> is a dashboard showing statistics about TSM server status."
+	},
+
+	"mcit-omt-huddle": {
+		"label": "OMT Huddle Board",
+		"link": "/midash/default/view/?app=mcit-omt-huddle",
+		"description": "The <a class='link' href='%(link)s'>%(label)s</a> is a dashboard showing MCIT OMT Remedy ticket summary KPIs."
+	},
+
+	"servicedesk": {
+		"label": "Alerts Dashboard | Report",
+		"link": "http://alertmon.mcit.med.umich.edu:8080/Dashboard/alert.jsp",
+		"description": "The <a class='link' href='%(link)s'>Alerts Dashboard</a> contains a list of the alerts that have been generated from SiteScope and InterMapper. It is used for manual escalation of EOC systems alerts. Status categories are red, yellow, and green. The Report for this dashboard lists the escalations that have been performed by the Service Desk."
+	}
+},
+"02": {
+	"label":	"Tools",
+	"keys": [ "majorincident", "opstatus" ],
+	"majorincident": {
+		"label": "Major Incident",
+		"link": "/MajorIncident/",
+		"description": "The <a class='link' href='%(link)s'>Major Incident</a> tool provides ways:<ul><li>for UMHS staff to view a list of current major incidents;</li><li>for the operators to initiate a major incident.</li></ul>"
+	},
+	"opstatus": {
+		"label": "Operational Status",
+		"link": "/OperationalStatus/status.jsp",
+		"description": "The <a class='link' href='%(link)s'>Operational Status</a> tool contains a list of service groups for ISO, and lists a status related to the current health of the service. Status categories are <span style='background:red'>&nbsp;red </span>, <span style='background:yellow'>&nbsp;yellow </span>, and <span style='background:green'>&nbsp;green </span>.<br/><br/><a target='miops-docs' href='https://i.med.umich.edu/sites/MCIT/iso/sp/eMpF WiKi/Operational Status User Documents.aspx'>Documentation for this tool</a> may be found in SharePoint."
+	}
+},
+"03": {
+	"label":	"System Health",
+	"app01": {
+		"label": "SiteScope Dashboard",
+		"link": "/midash/apps/view?app=mcit_sitescope",
+		"description": "The <a class='link' href='%(link)s'>SiteScope Dashboard</a> displays aggregated SiteScope monitor status."
+	}
+}
+}

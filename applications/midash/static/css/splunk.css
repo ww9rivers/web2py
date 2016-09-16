@@ -1,0 +1,195 @@
+body {
+    padding-top: 40px;
+}
+
+#searchInput {
+}
+
+.pull-right {
+    float: right;
+}
+
+.capitalize {
+    text-transform: capitalize;
+}
+
+div#map-container {
+    padding-top: 20px;
+}
+
+div#map-canvas {
+    width: 100%;
+    height: 700px;
+}
+
+div.highlight {
+    background-color: #EDEDE7;
+    padding: 10px 0;
+    margin: -10px 0 10px;
+    -webkit-border-radius: 4px;
+    -moz-border-radius: 4px;
+    border-radius: 4px;
+}
+
+div.highlight #messages {
+    margin: 0px 16px 0px 20px;
+}
+
+div.highlight #messages .alert-message {
+    margin: 0px 0px 5px 0px;
+}
+
+.form-stacked div.highlight {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    padding-left: 10px;
+    margin-top: 0;
+    margin-left: -20px;
+}
+
+input.xxxlarge {
+    width: 840px;
+    height: 24px;
+}
+
+div.separator {
+    border-top: 1px solid #eee;
+    margin-top: 5px;
+    padding-top: 5px;
+}
+
+.hidden {
+    display: none;
+}
+
+#results {
+    overflow-x: auto;
+    height: 80%;
+}
+
+div#pagination-row div.pagination {
+    margin: 0px auto;
+}
+
+ul.results {
+    list-style-type: none;
+    padding: 0px;
+    margin: 0px;
+}
+
+.results td {
+    vertical-align: text-top;
+}
+
+.results table {
+    table-layout: fixed;
+}
+
+.results .id-cell {
+    width: 50px;
+    min-width: 50px;
+    max-width: 50px;
+}
+
+.results .date-cell {
+    width: 120px;
+    min-width: 120px;
+    max-width: 120px;
+}
+
+.results .event-cell {
+    white-space: wrap;
+}
+
+.results td.result-info {
+    background: whiteSmoke;
+}
+
+.results td.result-info .close {
+    float: right;
+    margin-top: -2px;
+    color: #000000;
+    font-size: 20px;
+    font-weight: bold;
+    text-shadow: 0 1px 0 #ffffff;
+    filter: alpha(opacity=20);
+    -khtml-opacity: 0.2;
+    -moz-opacity: 0.2;
+    opacity: 0.2;
+}
+
+.results td.result-info .close:hover {
+    color: #000000;
+    text-decoration: none;
+    filter: alpha(opacity=40);
+    -khtml-opacity: 0.4;
+    -moz-opacity: 0.4;
+    opacity: 0.4;
+}
+
+tr.toprow td {
+    border-bottom: 0px;
+}
+
+.jobs tr.job-data {
+    font-size: 11px;
+}
+.jobs tr.job-name {
+    font-size: 12px;
+}
+
+button.signin {
+    margin-top: 5px;
+    padding: 10px 10px 11px;
+    float: none;
+}
+
+ul.signin {
+    float:right;
+}
+
+/*Fixes the positioning of the modal*/
+.modal {
+    top: 0px;
+    margin-top: 60px;
+    z-index: 10002; /*Make the modal display over the toolbar*/
+}
+
+/*From the 1.3 work in progress build*/
+.modal-backdrop {
+    background-color: #000;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10001; /*Make the modal display over the toolbar*/
+}
+
+.modal-backdrop.fade {
+    opacity: 0;
+}
+
+.modal-backdrop, .modal-backdrop.fade.in {
+    filter: alpha(opacity=50);
+    -khtml-opacity: 0.5;
+    -moz-opacity: 0.5;
+    opacity: 0.5;
+}
+
+.hide {
+    display: none;
+}
+
+.fade {
+    -webkit-transition: opacity 0.15s linear;
+    -moz-transition: opacity 0.15s linear;
+    -ms-transition: opacity 0.15s linear;
+    -o-transition: opacity 0.15s linear;
+    transition: opacity 0.15s linear;
+    opacity: 0;
+}
+
+.fade.in {
+    opacity: 1;
+}

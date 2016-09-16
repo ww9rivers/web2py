@@ -1,0 +1,130 @@
+/*
+
+Color Palette
+=======================
+#02254a - Michigan Blue
+#f9ad22 - Michigan Maize
+#002142 - Dark Blue
+#000033 - Navy Blue
+#26527d - Navbar Blue
+#2E6398 - Links
+#009900 - status good
+#FFFF00 - status warning
+#FFF 	- White
+#F7F7F7 - Very Light Grey
+#DFDCD6 - Light Grey (background, top nav bar, tabs, footer)
+#666 	- Medium Grey
+#333 	- Dark Grey
+
+
+#e3c287 - Drop Shadows
+*/
+
+body {
+	background-color: #C0C0C0;
+}
+#wrapper {
+	background-color: #C0C0C0;
+	margin: auto auto auto auto;
+	width: 90%;
+	height: 90%;
+}
+#branding {
+	background-color: #02254a;
+	padding: 1%;
+	font: sans-serif;
+	height:100px;
+}
+#logo{
+ 	float: left;
+}
+#title{
+	font: bold 200% Arial Black;
+	color: #ffffff;
+	padding-top:1em;
+}
+.navbar {
+	align: center;
+	vertical-align: middle;
+	background-color: #26527d;
+	font: bold 12pt Arial Black, sans-serif;
+	color: #ffffff;
+ 	height: 2pc;
+	margin: 0%;
+	padding: .5em 0;
+}
+.navbar a:link, .navbar a:visited{
+	align: center;
+	vertical-align: middle;
+	background-color: #26527d;
+	text-decoration: none;
+	font: bold 12pt Arial Black, sans-serif;
+	color: #ffffff;
+	height: 40px;
+}
+
+.navbar a:hover, #tabs a:hover{
+	color:#f9ad22;
+	text-decoration: underline;
+}
+/* Unnecessary for MIDash
+.heading a:link ,.heading a:visited{
+	align: center;
+	vertical-align: middle;
+	text-decoration: none;
+	font: bold 12pt Arial Black, sans-serif;
+	color: #02254a;
+	height: 40px;
+}
+.heading a:hover{
+	color:#f9ad22;
+	text-decoration: underline;
+}
+*/
+#footer ul {
+	list-style: none;
+	margin: 0;
+}
+#footer.two li {
+	float: left;
+	width: 50%;
+	text-align: center;
+}
+#footer.four li {
+	float: left;
+	width: 20%;
+	text-align: center;
+}
+#footer.five li {
+	float: left;
+	width: 16%;
+	text-align: center;
+}
+#footernavbar {
+
+}
+
+/* Overwrite the widget styling  */
+.ui-tabs {
+	padding:0;
+	position:static;
+	zoom:0;
+}
+.ui-tabs .ui-tabs-panel {
+	padding: 0;
+}
+
+.dashbar {
+	text-align: right;
+	background-color: black;
+	color: white;
+	width: 100%;
+}
+.dashbar a {
+	color: white;
+	padding: 0 10px;
+}
+.dashbar .id {
+	color: darkgray;
+	font-size: smaller;
+}

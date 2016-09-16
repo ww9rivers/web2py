@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<ns0:EntityDescriptor xmlns:ns0="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ns1="urn:oasis:names:tc:SAML:metadata:attribute" xmlns:ns2="urn:oasis:names:tc:SAML:2.0:assertion" xmlns:ns4="http://www.w3.org/2000/09/xmldsig#" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" entityID="https://wsdf0040.umhs.med.umich.edu:18443/midash/static/sp.xml"><ns0:Extensions><ns1:EntityAttributes><ns2:Attribute Name="http://macedir.org/entity-category" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:uri"><ns2:AttributeValue xsi:type="xs:string">http://www.geant.net/uri/dataprotection-code-of-conduct/v1</ns2:AttributeValue></ns2:Attribute></ns1:EntityAttributes></ns0:Extensions><ns0:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><ns0:KeyDescriptor use="encryption"><ns4:KeyInfo><ns4:X509Data><ns4:X509Certificate>MIICpDCCAYwCCQCIs0OoY5Gu1zANBgkqhkiG9w0BAQUFADAUMRIwEAYDVQQDEwl3
+c2RmMDA0MHUwHhcNMTMwMzA2MjE0ODM4WhcNMjMwMzA0MjE0ODM4WjAUMRIwEAYD
+VQQDEwl3c2RmMDA0MHUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDN
+e5+OBaw0OWdDyXShHmG+UYNBJeuUhV9d/zFychQMTvokxrR0usnHf0UsBTNlRjqW
+EZRdjeO36PEoDn8BXijUwDeh3v1kfsOigUI2vAGLZ/sRkPYET8LSvR0oMCcoXyKG
+SDk+wh1cYfjjTVDDPkA0OXcgGpy1+zOfJZnUYGctTGQ4qDsS3aopARpOTPv2rwYo
+uJJdlHLWXUkjP1NinNCmHahnjM+dPZ8d92lknhrGu8yi6EucxzQYnLj93QBaEgnX
+9VqVQ7gWb9Cp8ZsGc5sutbSRF9fw95pRQR0C384wRJ+RS+nP9IpwCthg9V3xZyk2
+wrMgx05FiFuoOt4Cps4hAgMBAAEwDQYJKoZIhvcNAQEFBQADggEBAASbXUUklGPb
+i7eWZhoQwvY7PsB8D539bvRRpwaKm7FsjyFsfvomE5uDFmphPujIvaobYWlnSkLF
+vDTMA9h8tTK/hQsUQIXahSJ3ME7DCOTAYUqPTweUqXxVKaMahturRzfcCYUBRH3l
+evGsZRu7KH44gZOIiSsMq4HlHp45GcfRM1vCymnkJ5Hpm3HBVfKyBPpwBRGEFrhx
+eILvSsred8H4Z/YCfr0x47TtevMkBh5JxCdvJ3HvsLx3zftaot94dKrwN2BFskgd
+4VuHGn14i64lyEuyKKFRYS0igJgMvjPaqVJtYiIjXTrCbKMHBPzcAa/WbK29u1kZ
+niDAEjCiZbI=
+</ns4:X509Certificate></ns4:X509Data></ns4:KeyInfo></ns0:KeyDescriptor><ns0:KeyDescriptor use="signing"><ns4:KeyInfo><ns4:X509Data><ns4:X509Certificate>MIICpDCCAYwCCQCIs0OoY5Gu1zANBgkqhkiG9w0BAQUFADAUMRIwEAYDVQQDEwl3
+c2RmMDA0MHUwHhcNMTMwMzA2MjE0ODM4WhcNMjMwMzA0MjE0ODM4WjAUMRIwEAYD
+VQQDEwl3c2RmMDA0MHUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDN
+e5+OBaw0OWdDyXShHmG+UYNBJeuUhV9d/zFychQMTvokxrR0usnHf0UsBTNlRjqW
+EZRdjeO36PEoDn8BXijUwDeh3v1kfsOigUI2vAGLZ/sRkPYET8LSvR0oMCcoXyKG
+SDk+wh1cYfjjTVDDPkA0OXcgGpy1+zOfJZnUYGctTGQ4qDsS3aopARpOTPv2rwYo
+uJJdlHLWXUkjP1NinNCmHahnjM+dPZ8d92lknhrGu8yi6EucxzQYnLj93QBaEgnX
+9VqVQ7gWb9Cp8ZsGc5sutbSRF9fw95pRQR0C384wRJ+RS+nP9IpwCthg9V3xZyk2
+wrMgx05FiFuoOt4Cps4hAgMBAAEwDQYJKoZIhvcNAQEFBQADggEBAASbXUUklGPb
+i7eWZhoQwvY7PsB8D539bvRRpwaKm7FsjyFsfvomE5uDFmphPujIvaobYWlnSkLF
+vDTMA9h8tTK/hQsUQIXahSJ3ME7DCOTAYUqPTweUqXxVKaMahturRzfcCYUBRH3l
+evGsZRu7KH44gZOIiSsMq4HlHp45GcfRM1vCymnkJ5Hpm3HBVfKyBPpwBRGEFrhx
+eILvSsred8H4Z/YCfr0x47TtevMkBh5JxCdvJ3HvsLx3zftaot94dKrwN2BFskgd
+4VuHGn14i64lyEuyKKFRYS0igJgMvjPaqVJtYiIjXTrCbKMHBPzcAa/WbK29u1kZ
+niDAEjCiZbI=
+</ns4:X509Certificate></ns4:X509Data></ns4:KeyInfo></ns0:KeyDescriptor><ns0:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://wsdf0040.umhs.med.umich.edu:18443/midash/default/user/login" index="1" /></ns0:SPSSODescriptor></ns0:EntityDescriptor>

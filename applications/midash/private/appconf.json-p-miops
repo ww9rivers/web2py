@@ -1,0 +1,63 @@
+{
+"version":	[ 1 ],
+"":
+[	"----------------------------------------------------------------------",
+	"Do not put this in CVS!",
+	"----------------------------------------------------------------------"
+],
+
+	"title":	"MCIT Service Desk (Pre-Production)",
+	"height":	"auto",
+	"db":		"sqlite://servicedesk.db",
+	"sso":		"saml2",
+
+	"apps_d":	"/opt/miops/var/miops/apps.d",
+	"iframe":
+	{
+		"app":
+		{
+			"return_to":	"/app/mcitservicedesk/summary"
+		},
+		"style":	"width:100%; height:100%; border:0; overflow:hidden;"
+	},
+
+	"splunkd":
+	{
+		"server":
+		{
+			"host":		"localhost",
+			"port":		8089,
+			"username":	"entmon",
+			"password":	"Try1t0ut@",
+			"app":		"mcitservicedesk"
+		},
+		"index":	"summary"
+	},
+	"splunkweb":
+	{
+		"url":		"/splunk",
+		"login":	"/en-US/account/insecurelogin?"
+	},
+	"ldap":
+	{
+		"mode":		"custom",
+		"server":	"p-idm-dir1.ent.med.umich.edu",
+		"secure":	1,
+		"base_dn":	"ou=people,dc=med,dc=umich,dc=edu",
+		"bind_dn":	"",
+		"bind_pw":	"",
+
+		"logging_level":"debug"
+	},
+	"mail":
+	{
+		"server":	"smail-int.med.umich.edu",
+		"sender":	"weiwang@med.umich.edu",
+		"login":	""
+	},
+
+	"#logout":	"https://p-mhealth.med.umich.edu:443/AGLogout",
+	"logout":	"https://p-mhealth.med.umich.edu:443/nesp/app/plogout?app=https%3A%2F%2Fp-miops.med.umich.edu%2F",
+
+	"":	"--- End ---"
+}

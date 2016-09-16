@@ -1,0 +1,88 @@
+{<extend 'layout-lite.html'>}
+
+{<
+response.files.insert(0,URL('static','js/jquery.js'))
+response.include_meta()
+response.include_files()
+>}
+
+<div style="border:5px ridge silver; padding:2px; background-color: #cccac0;
+	    text-align:center; vertical-align: baseline;
+	    font:16px helvetica,arial;
+	    width:460px; margin:100px auto;">
+<div style="background-color:#133b78; padding:4px;
+	    filter:progid:DXImageTransform.Microsoft.Gradient(GradientType=1,StartColorStr=#133B78,EndColorStr=#A1C1E8)"
+     align="left">
+<font face=helvetica,arial color=#ffffff>&nbsp;
+<b>Level-2</b>
+</font>
+</div>
+<img src="/midash/static/images/UMHS-AM-Level-2.jpg" vspace="0" hspace="0" border="0" style="padding:6px 4px;"></img>
+
+<div id="web2py_user_form" style="margin:12px 110px; padding: 0 0; text-align:center;">
+{<=form>}
+</div>
+
+<div style="padding: 20px 0 40px 0;">
+<a href="javascript:openNewWindow ('','http://idm.med.umich.edu/pwmfp/public/ForgottenPassword',5,500,580)">
+        <font face="helvetica,arial">Forgot your password?</a>
+     </a>
+<p>      
+      <a href="javascript:openNewWindow ('','http://ds.med.umich.edu/idmt/Level2Password/')">
+        <font face="helvetica,arial">Level-2 Password Reset eLearning Module</font>
+      </a>
+</div>
+</div>
+
+<script language="JavaScript" type="text/javascript">
+//--------------------------------------------------------------------------
+//  Display secondary window.
+//
+//    Flags:
+//      1        include toolbar and status line
+//      2        include toolbar, status line and set height and width
+//      3        no toolbar, status line, but set height and width
+//      4        same as 3, with no scroll bars
+//
+
+var remoteWind = null;
+function openNewWindow( title, url, flags, width, height) {
+  var left = (screen.width-width)/2;
+  var top = (screen.height-height)/4;
+
+  if( flags == 5) {
+    var pars = "scrollbars=no,resizable=yes" + ",width=" + width + ",height=" + height + ",left=" + left + ",top=" + top;
+    remoteWind = window.open('', title, pars );
+  } else if( flags == 4) {
+    var pars = "scrollbars=no,resizable=yes" + ",width=" + width + ",height=" + height + ",left=" + left + ",top=" + top;
+remoteWind = window.open('', title, pars );
+}
+else if( flags == 3) {
+var pars = "scrollbars=yes,resizable=yes" + ",width=" + width + ",height=" + height + ",left=" + left + ",top=" + top;
+remoteWind = window.open('', title, pars );
+}
+else if( flags == 2) {
+var pars = "scrollbars=yes,resizable=yes,toolbar=yes,status=yes,menubar=yes,location=yes" +
+",width=" + width + ",height=" + height;
+remoteWind = window.open('', title, pars );
+}
+else if( flags == 1) remoteWind = window.open('', title, 'scrollbars=yes,resizable=yes,toolbar=yes,status=yes,menubar=yes,location=yes');
+else remoteWind = window.open('', title, 'scrollbars=yes,resizable=yes');
+ 
+        if (remoteWind != null) {
+if (remoteWind.opener == null) {
+remoteWind.opener = self;
+if ((window.focus)&&((navigator.appName.indexOf("Microsoft")==-1)||(parseInt(navigator.appVersion)!=4))) { remoteWind.focus(); }
+}
+remoteWind.location.href = url;
+if ((window.focus)&&((navigator.appName.indexOf("Microsoft")==-1)||(parseInt(navigator.appVersion)!=4))) { remoteWind.focus(); }
+}
+}
+
+jQuery("#web2py_user_form input:visible:enabled:first").focus();
+{<if request.args(0)=='register':>}
+    web2py_validate_entropy(jQuery('#auth_user_password'),100);
+{<elif request.args(0)=='change_password':>}
+    web2py_validate_entropy(jQuery('#no_table_new_password'),100);
+{<pass>}
+</script>

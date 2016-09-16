@@ -1,0 +1,15 @@
+{
+    "labels": [ "Change Calendar", "EOC Systems", "Event Log", "Staff List", "Outages" ],
+    "links":
+    {
+	"Change Calendar":
+	{
+	    "_href":		"https://webapps.med.umich.edu/ChangeCal/",
+	    "_target":		"_blank"
+	},
+	"EOC Systems":		"https://i.med.umich.edu/MCIT/NCDC/ESIR/Lists/EOC%20Systems%20List/EOC%20List%20View.aspx",
+	"Event Log": "https://prodremedy.med.umich.edu/arsys/servlet/ViewFormServlet?form=EventLog&view=webSubmit&mode=Submit&server=prodremedy.med.umich.edu",
+	"Staff List":		"https://ummcweb29.mcit.med.umich.edu/mcit/mbsgroup/stafflist/",
+	"Outages":		"https://i.med.umich.edu/MCIT/CS/customer/askforhelp/Lists/Outages/Current.aspx"
+    }
+}

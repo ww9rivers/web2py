@@ -1,0 +1,358 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<md:EntityDescriptor
+    xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"
+    ID="idqXCYGT2jA57iEPghxoBztzHOJ38"
+    entityID="https://p-weblogin.med.umich.edu:8443/nidp/saml2/metadata">
+  <ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+    <ds:SignedInfo>
+      <CanonicalizationMethod xmlns="http://www.w3.org/2000/09/xmldsig#" Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+      <ds:SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/>
+      <ds:Reference URI="#idqXCYGT2jA57iEPghxoBztzHOJ38">
+	<ds:Transforms>
+	  <ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+	  <ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+	</ds:Transforms>
+	<ds:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/>
+	<DigestValue xmlns="http://www.w3.org/2000/09/xmldsig#">dhJHn1d8p5fF0Eq4rSFSMG1TevQ=</DigestValue>
+      </ds:Reference>
+    </ds:SignedInfo>
+    <SignatureValue xmlns="http://www.w3.org/2000/09/xmldsig#">
+BR/YvkBcyn4wndYeuLJYm7IBljD/1ClO1HyDVThVdEuY23FKpoywLDHoBdx6c6d0+Z6mNw5/sI+p
+opI5P1vRfUWbpXCAaW7UxcHtkD2otvOJAeThuFWWpEsw8z5zvqf5AGXRwiK4NykXauZJWIaN/pd5
+EBF4ETzYjdKOeqObkfm22Yfp9+1uJtCZaxbhXfYMwLaeKd0NoWEC7FRSXUWOYI5n8qywYcxD2T0e
+uPWMcyUOsNm8GAaH0q2sB+99wSOBZSXcXiL5kV5vuxdZRFegE+s5F7tw2fsVj5KBJKusgk7jPzB5
+kn5ydMpS+eI0hfwt08ZIHyz9acSPClI8e4yH9g==
+    </SignatureValue>
+    <ds:KeyInfo>
+      <ds:X509Data>
+	<ds:X509Certificate>
+MIIFFTCCA/2gAwIBAgIQZyq00aQLbU/yJ4iZ2NFzqTANBgkqhkiG9w0BAQsFADB+MQswCQYDVQQG
+EwJVUzEdMBsGA1UEChMUU3ltYW50ZWMgQ29ycG9yYXRpb24xHzAdBgNVBAsTFlN5bWFudGVjIFRy
+dXN0IE5ldHdvcmsxLzAtBgNVBAMTJlN5bWFudGVjIENsYXNzIDMgU2VjdXJlIFNlcnZlciBDQSAt
+IEc0MB4XDTE1MDEwMjAwMDAwMFoXDTE2MDEwMzIzNTk1OVowgZkxCzAJBgNVBAYTAlVTMREwDwYD
+VQQIDAhNaWNoaWdhbjESMBAGA1UEBwwJQW5uIEFyYm9yMS0wKwYDVQQKDCRVbml2ZXJzaXR5IG9m
+IE1pY2hpZ2FuIEhlYWx0aCBTeXN0ZW0xETAPBgNVBAsMCElTTy1NQ0lUMSEwHwYDVQQDDBhwLXdl
+YmxvZ2luLm1lZC51bWljaC5lZHUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDSB2Nr
+vJOZ1+Q2b+AxZy0qfG11oG7BH7DnVtVcE0SDuD2gzDHcdl3DmGx7qFiwqtWGDx5bhccN2MIy3zQP
+9vJRtO1oXsoTSAY6pgp9FRTiQ8D9D6YrU2F+acX00UDwxtj/hLGEenFtd3DghUoDYFexqFi1GVut
+jIyjy/kVJRd5sFjUHbzwu0Jde4XBGnRK1F/q0drjketIAnTXWLmi5tAg2+M1xK/EpUPW6qkp9ynK
+Kd8eUWwMU6Nf15MDY+AAlJDLgHz7YMBZsCwv3sC0mRt39Z+T14fVF5Sblw2CxDfIm4uxz5qe3YT9
+U2ZJ9inwKxqn1a4ecdafNIsYo+VgiBfPAgMBAAGjggFxMIIBbTAjBgNVHREEHDAaghhwLXdlYmxv
+Z2luLm1lZC51bWljaC5lZHUwCQYDVR0TBAIwADAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0lBBYwFAYI
+KwYBBQUHAwEGCCsGAQUFBwMCMGUGA1UdIAReMFwwWgYKYIZIAYb4RQEHNjBMMCMGCCsGAQUFBwIB
+FhdodHRwczovL2Quc3ltY2IuY29tL2NwczAlBggrBgEFBQcCAjAZGhdodHRwczovL2Quc3ltY2Iu
+Y29tL3JwYTAfBgNVHSMEGDAWgBRfYM9hkFXfhEMUimAqsvV69EMY7zArBgNVHR8EJDAiMCCgHqAc
+hhpodHRwOi8vc3Muc3ltY2IuY29tL3NzLmNybDBXBggrBgEFBQcBAQRLMEkwHwYIKwYBBQUHMAGG
+E2h0dHA6Ly9zcy5zeW1jZC5jb20wJgYIKwYBBQUHMAKGGmh0dHA6Ly9zcy5zeW1jYi5jb20vc3Mu
+Y3J0MA0GCSqGSIb3DQEBCwUAA4IBAQArS9T7v57sawK70bSTkizUyopxp2CxRqgLXLF5kOKM7uMS
+xn3Awxpkd59xXhNnaBkO+zTLKloJIrZPgrPVeJasQontMeUsvXjpRNaiP4tcrSZ0J48e3otRdMze
+oiG2i5xTgfDnFMhKwDZzy0Y/sSEPZaOL4Z1a8cFWQouABZ+k8A6/zxf3JbP5xw9zNngJTu39IVD6
+h2zH1Jl6oj/l4wG0Fo380gOj2IEsB8JsSU4RECr5akrTKg83+Twi1euHPVOevupH3TZQi+tU5in4
+Sra1emYZKzGO7b4QgM5HCxuw8/gL7jzMJfMpfAqNoLP6FrYDhd54/kzTwD/NP33uEKCr
+	</ds:X509Certificate>
+      </ds:X509Data>
+    </ds:KeyInfo>
+  </ds:Signature>
+  <md:AttributeAuthorityDescriptor
+      ID="idABt2kSOMi4qSAoZkTGAui8eGrdk"
+      protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <md:KeyDescriptor use="signing">
+      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+	<ds:X509Data>
+	  <ds:X509Certificate>
+MIIFFTCCA/2gAwIBAgIQZyq00aQLbU/yJ4iZ2NFzqTANBgkqhkiG9w0BAQsFADB+MQswCQYDVQQG
+EwJVUzEdMBsGA1UEChMUU3ltYW50ZWMgQ29ycG9yYXRpb24xHzAdBgNVBAsTFlN5bWFudGVjIFRy
+dXN0IE5ldHdvcmsxLzAtBgNVBAMTJlN5bWFudGVjIENsYXNzIDMgU2VjdXJlIFNlcnZlciBDQSAt
+IEc0MB4XDTE1MDEwMjAwMDAwMFoXDTE2MDEwMzIzNTk1OVowgZkxCzAJBgNVBAYTAlVTMREwDwYD
+VQQIDAhNaWNoaWdhbjESMBAGA1UEBwwJQW5uIEFyYm9yMS0wKwYDVQQKDCRVbml2ZXJzaXR5IG9m
+IE1pY2hpZ2FuIEhlYWx0aCBTeXN0ZW0xETAPBgNVBAsMCElTTy1NQ0lUMSEwHwYDVQQDDBhwLXdl
+YmxvZ2luLm1lZC51bWljaC5lZHUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDSB2Nr
+vJOZ1+Q2b+AxZy0qfG11oG7BH7DnVtVcE0SDuD2gzDHcdl3DmGx7qFiwqtWGDx5bhccN2MIy3zQP
+9vJRtO1oXsoTSAY6pgp9FRTiQ8D9D6YrU2F+acX00UDwxtj/hLGEenFtd3DghUoDYFexqFi1GVut
+jIyjy/kVJRd5sFjUHbzwu0Jde4XBGnRK1F/q0drjketIAnTXWLmi5tAg2+M1xK/EpUPW6qkp9ynK
+Kd8eUWwMU6Nf15MDY+AAlJDLgHz7YMBZsCwv3sC0mRt39Z+T14fVF5Sblw2CxDfIm4uxz5qe3YT9
+U2ZJ9inwKxqn1a4ecdafNIsYo+VgiBfPAgMBAAGjggFxMIIBbTAjBgNVHREEHDAaghhwLXdlYmxv
+Z2luLm1lZC51bWljaC5lZHUwCQYDVR0TBAIwADAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0lBBYwFAYI
+KwYBBQUHAwEGCCsGAQUFBwMCMGUGA1UdIAReMFwwWgYKYIZIAYb4RQEHNjBMMCMGCCsGAQUFBwIB
+FhdodHRwczovL2Quc3ltY2IuY29tL2NwczAlBggrBgEFBQcCAjAZGhdodHRwczovL2Quc3ltY2Iu
+Y29tL3JwYTAfBgNVHSMEGDAWgBRfYM9hkFXfhEMUimAqsvV69EMY7zArBgNVHR8EJDAiMCCgHqAc
+hhpodHRwOi8vc3Muc3ltY2IuY29tL3NzLmNybDBXBggrBgEFBQcBAQRLMEkwHwYIKwYBBQUHMAGG
+E2h0dHA6Ly9zcy5zeW1jZC5jb20wJgYIKwYBBQUHMAKGGmh0dHA6Ly9zcy5zeW1jYi5jb20vc3Mu
+Y3J0MA0GCSqGSIb3DQEBCwUAA4IBAQArS9T7v57sawK70bSTkizUyopxp2CxRqgLXLF5kOKM7uMS
+xn3Awxpkd59xXhNnaBkO+zTLKloJIrZPgrPVeJasQontMeUsvXjpRNaiP4tcrSZ0J48e3otRdMze
+oiG2i5xTgfDnFMhKwDZzy0Y/sSEPZaOL4Z1a8cFWQouABZ+k8A6/zxf3JbP5xw9zNngJTu39IVD6
+h2zH1Jl6oj/l4wG0Fo380gOj2IEsB8JsSU4RECr5akrTKg83+Twi1euHPVOevupH3TZQi+tU5in4
+Sra1emYZKzGO7b4QgM5HCxuw8/gL7jzMJfMpfAqNoLP6FrYDhd54/kzTwD/NP33uEKCr
+	  </ds:X509Certificate>
+	</ds:X509Data>
+      </ds:KeyInfo>
+      <md:EncryptionMethod
+	  Algorithm="http://www.w3.org/2001/04/xmlenc#tripledes-cbc"/>
+    </md:KeyDescriptor>
+    <md:KeyDescriptor use="encryption">
+      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+	<ds:X509Data>
+	  <ds:X509Certificate>
+MIIFNTCCBB2gAwIBAgIkAhwR/6UpMlnO4+Qf5du38+Zx7R7CdM1hiW8Abc4fAgIWDa+zMA0GCSqG
+SIb3DQEBBQUAMD4xGjAYBgNVBAsTEU9yZ2FuaXphdGlvbmFsIENBMSAwHgYDVQQKFBdpZG1hdXRo
+el9wcmVwcm9kMDFfdHJlZTAeFw0xMjA4MDgxNzU0NTJaFw0yMjA4MDgxNzU0NTJaMEMxGDAWBgNV
+BAMTD3Rlc3QtZW5jcnlwdGlvbjEWMBQGA1UECxMNYWNjZXNzTWFuYWdlcjEPMA0GA1UEChMGbm92
+ZWxsMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArLRQiZld1s4atQdHYoSR1gzDFDvy
+opneg+dbRCPfGKFWOxFUZZjaXO6p8KmeerEbejCKiQAeMo1ysvjm5ABPI12mFZsj6YBXtO8/7L02
+Rg+jNme3KVBEnavOVaCtJxhEcaeQ9j/KPJH41OBKpvWzc8iaRQD33mba+4ONSbCEDm4CPt+kO1rZ
+VjLnpPLw/PVwQYIwHxIIFNb+21ExvczAYhGQo/S+vVj+w0u0KsnDAx7h4Fd2rsGybpI1lNgon01H
+tGIrqZ+OUvg89Kq5iz1wxPMa+y9a9k3TsI2hJKvffLW5XTQd0NocMwiCmaBkFfIEMWs2AJVeQBoy
+LnD50QOj0QIDAQABo4ICFDCCAhAwHQYDVR0OBBYEFFmIciP+dt6vZ9WRIBX4CtSqXH7FMB8GA1Ud
+IwQYMBaAFMhk/PwYM2Yrsli/D8Y+cdx5gLR+MIIBzAYLYIZIAYb4NwEJBAEEggG7MIIBtwQCAQAB
+Af8THU5vdmVsbCBTZWN1cml0eSBBdHRyaWJ1dGUodG0pFkNodHRwOi8vZGV2ZWxvcGVyLm5vdmVs
+bC5jb20vcmVwb3NpdG9yeS9hdHRyaWJ1dGVzL2NlcnRhdHRyc192MTAuaHRtMIIBSKAaAQEAMAgw
+BgIBAQIBRjAIMAYCAQECAQoCAWmhGgEBADAIMAYCAQECAQAwCDAGAgEBAgEAAgEAogYCARcBAf+j
+ggEEoFgCAQICAgD/AgEAAw0AgAAAAAAAAAAAAAAAAwkAgAAAAAAAAAAwGDAQAgEAAgh/////////
+/wEBAAIEBvDfSDAYMBACAQACCH//////////AQEAAgQG8N9IoVgCAQICAgD/AgEAAw0AQAAAAAAA
+AAAAAAAAAwkAQAAAAAAAAAAwGDAQAgEAAgh//////////wEBAAIEEf+lKTAYMBACAQACCH//////
+////AQEAAgQR/6Upok4wTAIBAgIBAAICAP8DDQCAAAAAAAAAAAAAAAADCQCAAAAAAAAAADASMBAC
+AQACCH//////////AQEAMBIwEAIBAAIIf/////////8BAQAwDQYJKoZIhvcNAQEFBQADggEBAHFq
+7O5TCJgyovJCJpxj7JvpGwEKMJkzj0oggtxadKFLq6NEIIdnXPEUQxXiZW5G2/LhO1uEZo0KFFVO
+mA/tmDI2L0DLcpgBxacBzYqg2N/wSYFAfq37oNRcQZNZPTn28LL58WGf3kCYR3Rwc1eDPtH/AZT4
+gv600F9Bfzto1/CI72fnGrjCrJb/j3jH0T70JnxZJsxvNUvPhKC409daAiQNSSQcCZ2NITx+p3Sa
+cA/p/TcuHh6FDcFWgUsHXVg+mkN9Hj46lCQxqV/B2x3Z2OcPfub+iW7TPFWdRtbsCpORDDe+KsyF
+l300ZvqRNl/1lY9buEuy1VfUfROgxjOsuIA=
+	  </ds:X509Certificate>
+	</ds:X509Data>
+      </ds:KeyInfo>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes128-cbc"/>
+    </md:KeyDescriptor>
+    <md:AttributeService Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP" Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/soap"/>
+    <md:AssertionIDRequestService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/soap"/>
+    <md:AssertionIDRequestService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:URI"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/assertion"/>
+  </md:AttributeAuthorityDescriptor>
+  <md:IDPSSODescriptor ID="idScKPMQU7Qw-M5FRDsHAZEJdUVYM" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <md:KeyDescriptor use="signing">
+      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+	<ds:X509Data>
+	  <ds:X509Certificate>
+MIIFFTCCA/2gAwIBAgIQZyq00aQLbU/yJ4iZ2NFzqTANBgkqhkiG9w0BAQsFADB+MQswCQYDVQQG
+EwJVUzEdMBsGA1UEChMUU3ltYW50ZWMgQ29ycG9yYXRpb24xHzAdBgNVBAsTFlN5bWFudGVjIFRy
+dXN0IE5ldHdvcmsxLzAtBgNVBAMTJlN5bWFudGVjIENsYXNzIDMgU2VjdXJlIFNlcnZlciBDQSAt
+IEc0MB4XDTE1MDEwMjAwMDAwMFoXDTE2MDEwMzIzNTk1OVowgZkxCzAJBgNVBAYTAlVTMREwDwYD
+VQQIDAhNaWNoaWdhbjESMBAGA1UEBwwJQW5uIEFyYm9yMS0wKwYDVQQKDCRVbml2ZXJzaXR5IG9m
+IE1pY2hpZ2FuIEhlYWx0aCBTeXN0ZW0xETAPBgNVBAsMCElTTy1NQ0lUMSEwHwYDVQQDDBhwLXdl
+YmxvZ2luLm1lZC51bWljaC5lZHUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDSB2Nr
+vJOZ1+Q2b+AxZy0qfG11oG7BH7DnVtVcE0SDuD2gzDHcdl3DmGx7qFiwqtWGDx5bhccN2MIy3zQP
+9vJRtO1oXsoTSAY6pgp9FRTiQ8D9D6YrU2F+acX00UDwxtj/hLGEenFtd3DghUoDYFexqFi1GVut
+jIyjy/kVJRd5sFjUHbzwu0Jde4XBGnRK1F/q0drjketIAnTXWLmi5tAg2+M1xK/EpUPW6qkp9ynK
+Kd8eUWwMU6Nf15MDY+AAlJDLgHz7YMBZsCwv3sC0mRt39Z+T14fVF5Sblw2CxDfIm4uxz5qe3YT9
+U2ZJ9inwKxqn1a4ecdafNIsYo+VgiBfPAgMBAAGjggFxMIIBbTAjBgNVHREEHDAaghhwLXdlYmxv
+Z2luLm1lZC51bWljaC5lZHUwCQYDVR0TBAIwADAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0lBBYwFAYI
+KwYBBQUHAwEGCCsGAQUFBwMCMGUGA1UdIAReMFwwWgYKYIZIAYb4RQEHNjBMMCMGCCsGAQUFBwIB
+FhdodHRwczovL2Quc3ltY2IuY29tL2NwczAlBggrBgEFBQcCAjAZGhdodHRwczovL2Quc3ltY2Iu
+Y29tL3JwYTAfBgNVHSMEGDAWgBRfYM9hkFXfhEMUimAqsvV69EMY7zArBgNVHR8EJDAiMCCgHqAc
+hhpodHRwOi8vc3Muc3ltY2IuY29tL3NzLmNybDBXBggrBgEFBQcBAQRLMEkwHwYIKwYBBQUHMAGG
+E2h0dHA6Ly9zcy5zeW1jZC5jb20wJgYIKwYBBQUHMAKGGmh0dHA6Ly9zcy5zeW1jYi5jb20vc3Mu
+Y3J0MA0GCSqGSIb3DQEBCwUAA4IBAQArS9T7v57sawK70bSTkizUyopxp2CxRqgLXLF5kOKM7uMS
+xn3Awxpkd59xXhNnaBkO+zTLKloJIrZPgrPVeJasQontMeUsvXjpRNaiP4tcrSZ0J48e3otRdMze
+oiG2i5xTgfDnFMhKwDZzy0Y/sSEPZaOL4Z1a8cFWQouABZ+k8A6/zxf3JbP5xw9zNngJTu39IVD6
+h2zH1Jl6oj/l4wG0Fo380gOj2IEsB8JsSU4RECr5akrTKg83+Twi1euHPVOevupH3TZQi+tU5in4
+Sra1emYZKzGO7b4QgM5HCxuw8/gL7jzMJfMpfAqNoLP6FrYDhd54/kzTwD/NP33uEKCr
+	  </ds:X509Certificate>
+	</ds:X509Data>
+      </ds:KeyInfo>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#tripledes-cbc"/>
+    </md:KeyDescriptor>
+    <md:KeyDescriptor use="encryption">
+      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+	<ds:X509Data>
+	  <ds:X509Certificate>
+MIIFNTCCBB2gAwIBAgIkAhwR/6UpMlnO4+Qf5du38+Zx7R7CdM1hiW8Abc4fAgIWDa+zMA0GCSqG
+SIb3DQEBBQUAMD4xGjAYBgNVBAsTEU9yZ2FuaXphdGlvbmFsIENBMSAwHgYDVQQKFBdpZG1hdXRo
+el9wcmVwcm9kMDFfdHJlZTAeFw0xMjA4MDgxNzU0NTJaFw0yMjA4MDgxNzU0NTJaMEMxGDAWBgNV
+BAMTD3Rlc3QtZW5jcnlwdGlvbjEWMBQGA1UECxMNYWNjZXNzTWFuYWdlcjEPMA0GA1UEChMGbm92
+ZWxsMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArLRQiZld1s4atQdHYoSR1gzDFDvy
+opneg+dbRCPfGKFWOxFUZZjaXO6p8KmeerEbejCKiQAeMo1ysvjm5ABPI12mFZsj6YBXtO8/7L02
+Rg+jNme3KVBEnavOVaCtJxhEcaeQ9j/KPJH41OBKpvWzc8iaRQD33mba+4ONSbCEDm4CPt+kO1rZ
+VjLnpPLw/PVwQYIwHxIIFNb+21ExvczAYhGQo/S+vVj+w0u0KsnDAx7h4Fd2rsGybpI1lNgon01H
+tGIrqZ+OUvg89Kq5iz1wxPMa+y9a9k3TsI2hJKvffLW5XTQd0NocMwiCmaBkFfIEMWs2AJVeQBoy
+LnD50QOj0QIDAQABo4ICFDCCAhAwHQYDVR0OBBYEFFmIciP+dt6vZ9WRIBX4CtSqXH7FMB8GA1Ud
+IwQYMBaAFMhk/PwYM2Yrsli/D8Y+cdx5gLR+MIIBzAYLYIZIAYb4NwEJBAEEggG7MIIBtwQCAQAB
+Af8THU5vdmVsbCBTZWN1cml0eSBBdHRyaWJ1dGUodG0pFkNodHRwOi8vZGV2ZWxvcGVyLm5vdmVs
+bC5jb20vcmVwb3NpdG9yeS9hdHRyaWJ1dGVzL2NlcnRhdHRyc192MTAuaHRtMIIBSKAaAQEAMAgw
+BgIBAQIBRjAIMAYCAQECAQoCAWmhGgEBADAIMAYCAQECAQAwCDAGAgEBAgEAAgEAogYCARcBAf+j
+ggEEoFgCAQICAgD/AgEAAw0AgAAAAAAAAAAAAAAAAwkAgAAAAAAAAAAwGDAQAgEAAgh/////////
+/wEBAAIEBvDfSDAYMBACAQACCH//////////AQEAAgQG8N9IoVgCAQICAgD/AgEAAw0AQAAAAAAA
+AAAAAAAAAwkAQAAAAAAAAAAwGDAQAgEAAgh//////////wEBAAIEEf+lKTAYMBACAQACCH//////
+////AQEAAgQR/6Upok4wTAIBAgIBAAICAP8DDQCAAAAAAAAAAAAAAAADCQCAAAAAAAAAADASMBAC
+AQACCH//////////AQEAMBIwEAIBAAIIf/////////8BAQAwDQYJKoZIhvcNAQEFBQADggEBAHFq
+7O5TCJgyovJCJpxj7JvpGwEKMJkzj0oggtxadKFLq6NEIIdnXPEUQxXiZW5G2/LhO1uEZo0KFFVO
+mA/tmDI2L0DLcpgBxacBzYqg2N/wSYFAfq37oNRcQZNZPTn28LL58WGf3kCYR3Rwc1eDPtH/AZT4
+gv600F9Bfzto1/CI72fnGrjCrJb/j3jH0T70JnxZJsxvNUvPhKC409daAiQNSSQcCZ2NITx+p3Sa
+cA/p/TcuHh6FDcFWgUsHXVg+mkN9Hj46lCQxqV/B2x3Z2OcPfub+iW7TPFWdRtbsCpORDDe+KsyF
+l300ZvqRNl/1lY9buEuy1VfUfROgxjOsuIA=
+	  </ds:X509Certificate>
+	</ds:X509Data>
+      </ds:KeyInfo>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#aes128-cbc"/>
+    </md:KeyDescriptor>
+    <md:ArtifactResolutionService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/soap"
+	index="0"
+	isDefault="true"/>
+    <md:SingleLogoutService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/slo"
+	ResponseLocation="https://p-weblogin.med.umich.edu:8443/nidp/saml2/slo_return"/>
+    <md:SingleLogoutService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/soap"/>
+    <md:SingleLogoutService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/slo"
+	ResponseLocation="https://p-weblogin.med.umich.edu:8443/nidp/saml2/slo_return"/>
+    <md:ManageNameIDService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/soap"/>
+    <md:ManageNameIDService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/rni"
+	ResponseLocation="https://p-weblogin.med.umich.edu:8443/nidp/saml2/rni_return"/>
+    <md:ManageNameIDService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/rni"
+	ResponseLocation="https://p-weblogin.med.umich.edu:8443/nidp/saml2/rni_return"/>
+    <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent</md:NameIDFormat>
+    <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</md:NameIDFormat>
+    <md:SingleSignOnService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/sso"/>
+    <md:SingleSignOnService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/sso"/>
+    <md:NameIDMappingService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/soap"/>
+  </md:IDPSSODescriptor>
+  <md:SPSSODescriptor
+      ID="idIODFoSnatM63JrcybL5mq866avM"
+      protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <md:KeyDescriptor use="signing">
+      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+	<ds:X509Data>
+	  <ds:X509Certificate>
+MIIFFTCCA/2gAwIBAgIQZyq00aQLbU/yJ4iZ2NFzqTANBgkqhkiG9w0BAQsFADB+MQswCQYDVQQG
+EwJVUzEdMBsGA1UEChMUU3ltYW50ZWMgQ29ycG9yYXRpb24xHzAdBgNVBAsTFlN5bWFudGVjIFRy
+dXN0IE5ldHdvcmsxLzAtBgNVBAMTJlN5bWFudGVjIENsYXNzIDMgU2VjdXJlIFNlcnZlciBDQSAt
+IEc0MB4XDTE1MDEwMjAwMDAwMFoXDTE2MDEwMzIzNTk1OVowgZkxCzAJBgNVBAYTAlVTMREwDwYD
+VQQIDAhNaWNoaWdhbjESMBAGA1UEBwwJQW5uIEFyYm9yMS0wKwYDVQQKDCRVbml2ZXJzaXR5IG9m
+IE1pY2hpZ2FuIEhlYWx0aCBTeXN0ZW0xETAPBgNVBAsMCElTTy1NQ0lUMSEwHwYDVQQDDBhwLXdl
+YmxvZ2luLm1lZC51bWljaC5lZHUwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDSB2Nr
+vJOZ1+Q2b+AxZy0qfG11oG7BH7DnVtVcE0SDuD2gzDHcdl3DmGx7qFiwqtWGDx5bhccN2MIy3zQP
+9vJRtO1oXsoTSAY6pgp9FRTiQ8D9D6YrU2F+acX00UDwxtj/hLGEenFtd3DghUoDYFexqFi1GVut
+jIyjy/kVJRd5sFjUHbzwu0Jde4XBGnRK1F/q0drjketIAnTXWLmi5tAg2+M1xK/EpUPW6qkp9ynK
+Kd8eUWwMU6Nf15MDY+AAlJDLgHz7YMBZsCwv3sC0mRt39Z+T14fVF5Sblw2CxDfIm4uxz5qe3YT9
+U2ZJ9inwKxqn1a4ecdafNIsYo+VgiBfPAgMBAAGjggFxMIIBbTAjBgNVHREEHDAaghhwLXdlYmxv
+Z2luLm1lZC51bWljaC5lZHUwCQYDVR0TBAIwADAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0lBBYwFAYI
+KwYBBQUHAwEGCCsGAQUFBwMCMGUGA1UdIAReMFwwWgYKYIZIAYb4RQEHNjBMMCMGCCsGAQUFBwIB
+FhdodHRwczovL2Quc3ltY2IuY29tL2NwczAlBggrBgEFBQcCAjAZGhdodHRwczovL2Quc3ltY2Iu
+Y29tL3JwYTAfBgNVHSMEGDAWgBRfYM9hkFXfhEMUimAqsvV69EMY7zArBgNVHR8EJDAiMCCgHqAc
+hhpodHRwOi8vc3Muc3ltY2IuY29tL3NzLmNybDBXBggrBgEFBQcBAQRLMEkwHwYIKwYBBQUHMAGG
+E2h0dHA6Ly9zcy5zeW1jZC5jb20wJgYIKwYBBQUHMAKGGmh0dHA6Ly9zcy5zeW1jYi5jb20vc3Mu
+Y3J0MA0GCSqGSIb3DQEBCwUAA4IBAQArS9T7v57sawK70bSTkizUyopxp2CxRqgLXLF5kOKM7uMS
+xn3Awxpkd59xXhNnaBkO+zTLKloJIrZPgrPVeJasQontMeUsvXjpRNaiP4tcrSZ0J48e3otRdMze
+oiG2i5xTgfDnFMhKwDZzy0Y/sSEPZaOL4Z1a8cFWQouABZ+k8A6/zxf3JbP5xw9zNngJTu39IVD6
+h2zH1Jl6oj/l4wG0Fo380gOj2IEsB8JsSU4RECr5akrTKg83+Twi1euHPVOevupH3TZQi+tU5in4
+Sra1emYZKzGO7b4QgM5HCxuw8/gL7jzMJfMpfAqNoLP6FrYDhd54/kzTwD/NP33uEKCr
+	  </ds:X509Certificate>
+	</ds:X509Data>
+      </ds:KeyInfo>
+      <md:EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#tripledes-cbc"/>
+    </md:KeyDescriptor>
+    <md:KeyDescriptor use="encryption">
+      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+	<ds:X509Data>
+	  <ds:X509Certificate>
+MIIFNTCCBB2gAwIBAgIkAhwR/6UpMlnO4+Qf5du38+Zx7R7CdM1hiW8Abc4fAgIWDa+zMA0GCSqG
+SIb3DQEBBQUAMD4xGjAYBgNVBAsTEU9yZ2FuaXphdGlvbmFsIENBMSAwHgYDVQQKFBdpZG1hdXRo
+el9wcmVwcm9kMDFfdHJlZTAeFw0xMjA4MDgxNzU0NTJaFw0yMjA4MDgxNzU0NTJaMEMxGDAWBgNV
+BAMTD3Rlc3QtZW5jcnlwdGlvbjEWMBQGA1UECxMNYWNjZXNzTWFuYWdlcjEPMA0GA1UEChMGbm92
+ZWxsMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArLRQiZld1s4atQdHYoSR1gzDFDvy
+opneg+dbRCPfGKFWOxFUZZjaXO6p8KmeerEbejCKiQAeMo1ysvjm5ABPI12mFZsj6YBXtO8/7L02
+Rg+jNme3KVBEnavOVaCtJxhEcaeQ9j/KPJH41OBKpvWzc8iaRQD33mba+4ONSbCEDm4CPt+kO1rZ
+VjLnpPLw/PVwQYIwHxIIFNb+21ExvczAYhGQo/S+vVj+w0u0KsnDAx7h4Fd2rsGybpI1lNgon01H
+tGIrqZ+OUvg89Kq5iz1wxPMa+y9a9k3TsI2hJKvffLW5XTQd0NocMwiCmaBkFfIEMWs2AJVeQBoy
+LnD50QOj0QIDAQABo4ICFDCCAhAwHQYDVR0OBBYEFFmIciP+dt6vZ9WRIBX4CtSqXH7FMB8GA1Ud
+IwQYMBaAFMhk/PwYM2Yrsli/D8Y+cdx5gLR+MIIBzAYLYIZIAYb4NwEJBAEEggG7MIIBtwQCAQAB
+Af8THU5vdmVsbCBTZWN1cml0eSBBdHRyaWJ1dGUodG0pFkNodHRwOi8vZGV2ZWxvcGVyLm5vdmVs
+bC5jb20vcmVwb3NpdG9yeS9hdHRyaWJ1dGVzL2NlcnRhdHRyc192MTAuaHRtMIIBSKAaAQEAMAgw
+BgIBAQIBRjAIMAYCAQECAQoCAWmhGgEBADAIMAYCAQECAQAwCDAGAgEBAgEAAgEAogYCARcBAf+j
+ggEEoFgCAQICAgD/AgEAAw0AgAAAAAAAAAAAAAAAAwkAgAAAAAAAAAAwGDAQAgEAAgh/////////
+/wEBAAIEBvDfSDAYMBACAQACCH//////////AQEAAgQG8N9IoVgCAQICAgD/AgEAAw0AQAAAAAAA
+AAAAAAAAAwkAQAAAAAAAAAAwGDAQAgEAAgh//////////wEBAAIEEf+lKTAYMBACAQACCH//////
+////AQEAAgQR/6Upok4wTAIBAgIBAAICAP8DDQCAAAAAAAAAAAAAAAADCQCAAAAAAAAAADASMBAC
+AQACCH//////////AQEAMBIwEAIBAAIIf/////////8BAQAwDQYJKoZIhvcNAQEFBQADggEBAHFq
+7O5TCJgyovJCJpxj7JvpGwEKMJkzj0oggtxadKFLq6NEIIdnXPEUQxXiZW5G2/LhO1uEZo0KFFVO
+mA/tmDI2L0DLcpgBxacBzYqg2N/wSYFAfq37oNRcQZNZPTn28LL58WGf3kCYR3Rwc1eDPtH/AZT4
+gv600F9Bfzto1/CI72fnGrjCrJb/j3jH0T70JnxZJsxvNUvPhKC409daAiQNSSQcCZ2NITx+p3Sa
+cA/p/TcuHh6FDcFWgUsHXVg+mkN9Hj46lCQxqV/B2x3Z2OcPfub+iW7TPFWdRtbsCpORDDe+KsyF
+l300ZvqRNl/1lY9buEuy1VfUfROgxjOsuIA=
+	  </ds:X509Certificate>
+	</ds:X509Data>
+      </ds:KeyInfo>
+      <md:EncryptionMethod
+	  Algorithm="http://www.w3.org/2001/04/xmlenc#aes128-cbc"/>
+    </md:KeyDescriptor>
+    <md:ArtifactResolutionService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/spsoap"
+	index="0"
+	isDefault="true"/>
+    <md:SingleLogoutService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/spslo"
+	ResponseLocation="https://p-weblogin.med.umich.edu:8443/nidp/saml2/spslo_return"/>
+    <md:SingleLogoutService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/spsoap"/>
+    <md:SingleLogoutService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/spslo"
+	ResponseLocation="https://p-weblogin.med.umich.edu:8443/nidp/saml2/spslo_return"/>
+    <md:ManageNameIDService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:SOAP"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/spsoap"/>
+    <md:ManageNameIDService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/sprni"
+	ResponseLocation="https://p-weblogin.med.umich.edu:8443/nidp/saml2/sprni_return"/>
+    <md:ManageNameIDService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/sprni"
+	ResponseLocation="https://p-weblogin.med.umich.edu:8443/nidp/saml2/sprni_return"/>
+    <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent</md:NameIDFormat>
+    <md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:transient</md:NameIDFormat>
+    <md:AssertionConsumerService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/spassertion_consumer"
+	index="2"/>
+    <md:AssertionConsumerService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/spassertion_consumer"
+	index="1"/>
+    <md:AssertionConsumerService
+	Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+	Location="https://p-weblogin.med.umich.edu:8443/nidp/saml2/spassertion_consumer"
+	index="0"
+	isDefault="true"/>
+  </md:SPSSODescriptor>
+  <md:Organization>
+    <md:OrganizationName xml:lang="en">University of Michigan Health System</md:OrganizationName>
+    <md:OrganizationDisplayName xml:lang="en">University of Michigan Health System</md:OrganizationDisplayName>
+    <md:OrganizationURL xml:lang="en">http://med.umich.edu</md:OrganizationURL>
+  </md:Organization>
+  <md:ContactPerson contactType="other">
+    <md:Company>University of Michigan Health System</md:Company>
+  </md:ContactPerson>
+</md:EntityDescriptor>

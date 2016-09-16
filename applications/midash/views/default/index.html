@@ -1,0 +1,11 @@
+{<extend 'layout-lite.html'>}
+
+{<if 'dashbar' in globals():>}
+{<=dashbar>}
+{<pass>}
+
+{<if 'content' in globals():>}
+{<=content>}
+{<else:>}
+{<=BEAUTIFY(response._vars)>}
+{<pass>}

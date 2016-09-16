@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" ng-app>
+<head>
+  <!-- Always force latest IE rendering engine (even in intranet)
+       Remove this if you use the .htaccess -->
+  <!--[if IE]>
+      <meta http-equiv="X-UA-Compatible" content="IE=edge{<=not request.is_local and ',chrome=1' or ''>}">
+      <![endif]-->
+
+  <title>{<=title or request.application>}</title>
+
+  <meta charset="utf-8" />
+
+  <!-- http://dev.w3.org/html5/markup/meta.name.html -->
+  <meta name="application-name" content="{<=request.application>}" />
+
+  <!--  Mobile Viewport Fix
+        j.mp/mobileviewport & davidbcalhoun.com/2010/viewport-metatag
+        device-width: Occupy full width of the screen in its current orientation
+        initial-scale = 1.0 retains dimensions instead of zooming out if page height > device height
+        user-scalable = yes allows the user to zoom in -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="shortcut icon" href="{<=URL('static','images/favicon.ico')>}" type="image/x-icon">
+  <link rel="apple-touch-icon" href="{<=URL('static','images/favicon.png')>}">
+
+  <!-- script src='https://ajax.googleapis.com/ajax/libs/angularjs/1.2.3/angular.min.js'></script -->
+
+  <link href="{<=URL('static', 'css/style.css')>}" rel="stylesheet" type="text/css" />
+  <noscript><link href="{<=URL('static', 'css/web2py_bootstrap_nojs.css')>}" rel="stylesheet" type="text/css" /></noscript>
+  {<block head>}{<end>}
+</head>
+
+<body style="width:100%;
+	     height:{<=height or "auto">};
+	     margin:0; padding:0">
+	{<block center>}
+	{<include>}
+	{<end>}
+</body>
+</html>

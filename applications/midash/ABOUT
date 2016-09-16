@@ -1,0 +1,7 @@
+Write something about this app.
+Developed with web2py.
+
+--	splunkapp-prod02 : Inventory-Uniqwireddevices-last7days
+   --	Nathan Haley, Matt Galazka (and admin) setup field extractions here
+   --	Wei setup field extraction on search head 2 and empfapp-prod02
+   --	
