@@ -10,17 +10,14 @@ import datetime
 import copy
 import gluon.contenttype
 import gluon.fileutils
+from gluon._compat import iteritems
 
 try:
     import pygraphviz as pgv
 except ImportError:
     pgv = None
 
-<<<<<<< HEAD
-response.subtitle = 'Database Administration (appadmin)'
-=======
 is_gae = request.env.web2py_runtime_gae or False
->>>>>>> 4cbdf612af9e9c992e99c6c9e60e2170e4deb853
 
 # ## critical --- make a copy of the environment
 
@@ -41,7 +38,21 @@ if request.is_https:
 elif (remote_addr not in hosts) and (remote_addr != "127.0.0.1"):
     raise HTTP(200, T('appadmin is disabled because insecure channel'))
 
-if (request.application == 'admin' and not session.authorized) or \
+if request.function == 'manage':
+    if not 'auth' in globals() or not request.args:
+        redirect(URL(request.controller, 'index'))
+    manager_action = auth.settings.manager_actions.get(request.args(0), None)
+    if manager_action is None and request.args(0) == 'auth':
+        manager_action = dict(role=auth.settings.auth_manager_role,
+                              heading=T('Manage Access Control'),
+                              tables=[auth.table_user(),
+                                      auth.table_group(),
+                                      auth.table_permission()])
+    manager_role = manager_action.get('role', None) if manager_action else None
+    if not (gluon.fileutils.check_credentials(request) or auth.has_membership(manager_role)):
+        raise HTTP(403, "Not authorized")
+    menu = False
+elif (request.application == 'admin' and not session.authorized) or \
         (request.application != 'admin' and not gluon.fileutils.check_credentials(request)):
     redirect(URL('admin', 'default', 'index',
                  vars=dict(send=URL(args=request.args, vars=request.vars))))
@@ -62,7 +73,6 @@ response.menu = [[T('design'), False, URL('admin', 'default', 'design',
 def get_databases(request):
     dbs = {}
     for (key, value) in global_env.items():
-        cond = False
         try:
             cond = isinstance(value, GQLDB)
         except:
@@ -184,7 +194,15 @@ def select():
     else:
         start = 0
     nrows = 0
-    stop = start + 100
+
+    step = 100
+    fields = []
+
+    if is_imap:
+        step = 3
+
+    stop = start + step
+
     table = None
     rows = []
     orderby = request.vars.orderby
@@ -230,8 +248,8 @@ def select():
                     start, stop), orderby=eval_in_global_env(orderby))
             else:
                 rows = db(query, ignore_common_filters=True).select(
-                    limitby=(start, stop))
-        except Exception, e:
+                    *fields, limitby=(start, stop))
+        except Exception as e:
             import traceback
             tb = traceback.format_exc()
             (rows, nrows) = ([], 0)
@@ -250,7 +268,7 @@ def select():
             import_csv(db[request.vars.table],
                        request.vars.csvfile.file)
             response.flash = T('data uploaded')
-        except Exception, e:
+        except Exception as e:
             response.flash = DIV(T('unable to parse csv file'), PRE(str(e)))
     # end handle upload csv
 
@@ -320,16 +338,6 @@ def state():
 
 
 def ccache():
-<<<<<<< HEAD
-    form = FORM(
-        P(TAG.BUTTON(
-            T("Clear CACHE?"), _type="submit", _name="yes", _value="yes")),
-        P(TAG.BUTTON(
-            T("Clear RAM"), _type="submit", _name="ram", _value="ram")),
-        P(TAG.BUTTON(
-            T("Clear DISK"), _type="submit", _name="disk", _value="disk")),
-    )
-=======
     if is_gae:
         form = FORM(
             P(TAG.BUTTON(T("Clear CACHE?"), _type="submit", _name="yes", _value="yes")))
@@ -345,7 +353,6 @@ def ccache():
             P(TAG.BUTTON(
                 T("Clear DISK"), _type="submit", _name="disk", _value="disk")),
         )
->>>>>>> 4cbdf612af9e9c992e99c6c9e60e2170e4deb853
 
     if form.accepts(request.vars, session):
         session.flash = ""
@@ -408,33 +415,6 @@ def ccache():
 
         return (hours, minutes, seconds)
 
-<<<<<<< HEAD
-    for key, value in cache.ram.storage.items():
-        if isinstance(value, dict):
-            ram['hits'] = value['hit_total'] - value['misses']
-            ram['misses'] = value['misses']
-            try:
-                ram['ratio'] = ram['hits'] * 100 / value['hit_total']
-            except (KeyError, ZeroDivisionError):
-                ram['ratio'] = 0
-        else:
-            if hp:
-                ram['bytes'] += hp.iso(value[1]).size
-                ram['objects'] += hp.iso(value[1]).count
-            ram['entries'] += 1
-            if value[0] < ram['oldest']:
-                ram['oldest'] = value[0]
-            ram['keys'].append((key, GetInHMS(time.time() - value[0])))
-    folder = os.path.join(request.folder,'cache')
-    if not os.path.exists(folder):
-        os.mkdir(folder)
-    locker = open(os.path.join(folder, 'cache.lock'), 'a')
-    portalocker.lock(locker, portalocker.LOCK_EX)
-    disk_storage = shelve.open(
-        os.path.join(folder, 'cache.shelve'))
-    try:
-        for key, value in disk_storage.items():
-=======
     if is_gae:
         gae_stats = cache.ram.client.get_stats()
         try:
@@ -445,31 +425,31 @@ def ccache():
         gae_stats['oldest'] = GetInHMS(time.time() - gae_stats['oldest_item_age'])
         total.update(gae_stats)
     else:
-        for key, value in cache.ram.storage.iteritems():
->>>>>>> 4cbdf612af9e9c992e99c6c9e60e2170e4deb853
-            if isinstance(value, dict):
-                ram['hits'] = value['hit_total'] - value['misses']
-                ram['misses'] = value['misses']
-                try:
-                    ram['ratio'] = ram['hits'] * 100 / value['hit_total']
-                except (KeyError, ZeroDivisionError):
-                    ram['ratio'] = 0
-            else:
-                if hp:
-                    ram['bytes'] += hp.iso(value[1]).size
-                    ram['objects'] += hp.iso(value[1]).count
-                ram['entries'] += 1
-                if value[0] < ram['oldest']:
-                    ram['oldest'] = value[0]
-                ram['keys'].append((key, GetInHMS(time.time() - value[0])))
+        # get ram stats directly from the cache object
+        ram_stats = cache.ram.stats[request.application]
+        ram['hits'] = ram_stats['hit_total'] - ram_stats['misses']
+        ram['misses'] = ram_stats['misses']
+        try:
+            ram['ratio'] = ram['hits'] * 100 / ram_stats['hit_total']
+        except (KeyError, ZeroDivisionError):
+            ram['ratio'] = 0
+
+        for key, value in iteritems(cache.ram.storage):
+            if hp:
+                ram['bytes'] += hp.iso(value[1]).size
+                ram['objects'] += hp.iso(value[1]).count
+            ram['entries'] += 1
+            if value[0] < ram['oldest']:
+                ram['oldest'] = value[0]
+            ram['keys'].append((key, GetInHMS(time.time() - value[0])))
 
         for key in cache.disk.storage:
             value = cache.disk.storage[key]
-            if isinstance(value, dict):
-                disk['hits'] = value['hit_total'] - value['misses']
-                disk['misses'] = value['misses']
+            if isinstance(value[1], dict):
+                disk['hits'] = value[1]['hit_total'] - value[1]['misses']
+                disk['misses'] = value[1]['misses']
                 try:
-                    disk['ratio'] = disk['hits'] * 100 / value['hit_total']
+                    disk['ratio'] = disk['hits'] * 100 / value[1]['hit_total']
                 except (KeyError, ZeroDivisionError):
                     disk['ratio'] = 0
             else:
@@ -481,12 +461,12 @@ def ccache():
                     disk['oldest'] = value[0]
                 disk['keys'].append((key, GetInHMS(time.time() - value[0])))
 
-        total['entries'] = ram['entries'] + disk['entries']
-        total['bytes'] = ram['bytes'] + disk['bytes']
-        total['objects'] = ram['objects'] + disk['objects']
-        total['hits'] = ram['hits'] + disk['hits']
-        total['misses'] = ram['misses'] + disk['misses']
-        total['keys'] = ram['keys'] + disk['keys']
+        ram_keys = ram.keys() # ['hits', 'objects', 'ratio', 'entries', 'keys', 'oldest', 'bytes', 'misses']
+        ram_keys.remove('ratio')
+        ram_keys.remove('oldest')
+        for key in ram_keys:
+            total[key] = ram[key] + disk[key]
+
         try:
             total['ratio'] = total['hits'] * 100 / (total['hits'] +
                                                 total['misses'])
@@ -573,21 +553,13 @@ def bg_graph_model():
         if hasattr(db[tablename],'_meta_graphmodel'):
             meta_graphmodel = db[tablename]._meta_graphmodel
         else:
-<<<<<<< HEAD
-            meta_graphmodel = dict(group='Undefined', color='#ECECEC')
-        
-        group = meta_graphmodel['group'].replace(' ', '') 
-=======
             meta_graphmodel = dict(group=request.application, color='#ECECEC')
 
         group = meta_graphmodel['group'].replace(' ', '')
->>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53
-        if not subgraphs.has_key(group):
+        if group not in subgraphs:
             subgraphs[group] = dict(meta=meta_graphmodel, tables=[])
-            subgraphs[group]['tables'].append(tablename)
-        else:
-            subgraphs[group]['tables'].append(tablename)        
-      
+        subgraphs[group]['tables'].append(tablename)
+
         graph.add_node(tablename, name=tablename, shape='plaintext',
                        label=table_template(tablename))
     
@@ -622,8 +594,6 @@ def bg_graph_model():
 
 def graph_model():    
     return dict(databases=databases, pgv=pgv)
-<<<<<<< HEAD
-=======
 
 def manage():
     tables = manager_action['tables']
@@ -709,4 +679,3 @@ def hooks():
             ul_t.append(UL([LI(A(f['funcname'], _class="editor_filelink", _href=f['url']if 'url' in f else None, **{'_data-lineno':f['lineno']-1})) for f in op['functions']]))
         ul_main.append(ul_t)
     return ul_main
->>>>>>> a1524d4da46ff851429a1de2022d852f8f2c8e53

@@ -50,6 +50,7 @@ applications/*/sessions/*
 applications/*/errors/*
 applications/*/cache/*
 applications/*/uploads/*
+applications/*/private/*
 applications/*/*.py[oc]
 applications/*/static/temp
 applications/*/progress.log
@@ -60,6 +61,7 @@ HOWTO-web2py-devel
 *.sublime-project
 *.sublime-workspace
 .idea/*
+<<<<<<< HEAD
 miops.py
 modpythonhandler.py
 options_std.py
@@ -71,3 +73,7 @@ ssl/
 web2py.egg-info/
 web2py.yaml
 web2py_modpython.py
+=======
+site-packages/
+logs/
+>>>>>>> 44362aa42948dca08ddf1b2f86ac03c69b0d48e4
