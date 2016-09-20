@@ -12,6 +12,8 @@
 *.class
 *.rej
 *.orig
+app.log
+app.log.*
 Thumbs.db
 .DS_Store
 deploy.sh

@@ -1,4 +1,0 @@
-2015-06-05 17:09:33,142 DEBUG 18936 139825206740736 configured_logger():41 midash already exists
-2015-06-05 17:09:33,142 DEBUG 18936 139825206740736 __init__():56 App config loaded: (/home/weiwang/oss/web2py/applications/midash/private/./dashboards-conf.json)
-2015-06-05 17:09:33,143 DEBUG 18936 139825206740736 configured_logger():41 midash already exists
-2015-06-05 17:09:33,143 DEBUG 18936 139825206740736 __init__():56 App config loaded: (/home/weiwang/oss/web2py/applications/midash/private/./footer-conf.json)
