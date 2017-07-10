@@ -1,4 +1,3 @@
-**/CVS
 .*
 *.pyc
 *.pyo
@@ -12,11 +11,8 @@
 *.class
 *.rej
 *.orig
-app.log
-app.log.*
 Thumbs.db
 .DS_Store
-deploy.sh
 index.yaml
 routes.py
 logging.conf
@@ -28,23 +24,25 @@ parameters*.py
 ./deposit
 ./benchmark
 ./build
-./CVS
 ./dist*
 ./dummy_tests
 ./optional_contrib
 ./ssl
 ./docs
 ./logs
-logs/
 ./*.zip
 ./gluon/*.1
 ./gluon/*.txt
 ./admin.w2p
 ./examples.w2p
 cron.master
-applications/*.py[oc]
-applications/examples
-applications/examples/*
+applications/*
+!applications/welcome
+!applications/welcome/*
+!applications/examples
+!applications/examples/*
+!applications/admin
+!applications/admin/*
 applications/*/databases/*
 applications/*/sessions/*
 applications/*/errors/*
@@ -61,19 +59,5 @@ HOWTO-web2py-devel
 *.sublime-project
 *.sublime-workspace
 .idea/*
-<<<<<<< HEAD
-miops.py
-modpythonhandler.py
-options_std.py
-pt-br.py
-queue.yaml
-run-18443.sh
-scripts/dbsessions2trash.py
-ssl/
-web2py.egg-info/
-web2py.yaml
-web2py_modpython.py
-=======
 site-packages/
 logs/
->>>>>>> 44362aa42948dca08ddf1b2f86ac03c69b0d48e4
