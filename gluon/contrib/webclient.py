@@ -43,9 +43,21 @@ class WebClient(object):
         self.forms = {}
         self.history = []
         self.cookies = {}
+        self.cookiejar = cookielib.CookieJar()
         self.default_headers = default_headers
         self.sessions = {}
         self.session_regex = session_regex and re.compile(session_regex)
+        self.headers = {}
+
+    def _parse_headers_in_cookies(self):
+        self.cookies = {}
+        if 'set-cookie' in self.headers:
+            for item in self.headers['set-cookie'].split(','):
+                cookie = item[:item.find(';')]
+                pos = cookie.find('=')
+                key = cookie[:pos]
+                value = cookie[pos+1:]
+                self.cookies[key.strip()] = value.strip()
 
     def get(self, url, cookies=None, headers=None, auth=None):
         return self.post(url, data=None, cookies=cookies,
@@ -68,9 +80,8 @@ class WebClient(object):
         cookies = cookies or {}
         headers = headers or {}
 
-        cj = cookielib.CookieJar()
         args = [
-            urllib2.HTTPCookieProcessor(cj),
+            urllib2.HTTPCookieProcessor(self.cookiejar),
             urllib2.HTTPHandler(debuglevel=0)
             ]
         # if required do basic auth
@@ -149,12 +160,7 @@ class WebClient(object):
             else:
                 raise error
 
-        # parse headers into cookies
-        self.cookies = {}
-        if 'set-cookie' in self.headers:
-            for item in self.headers['set-cookie'].split(','):
-                key, value = item[:item.find(';')].split('=')
-                self.cookies[key.strip()] = value.strip()
+        self._parse_headers_in_cookies()
 
         # check is a new session id has been issued, symptom of broken session
         if self.session_regex is not None:

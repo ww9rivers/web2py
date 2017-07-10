@@ -137,7 +137,10 @@ class RestrictedError(Exception):
         self.environment = environment
         if layer:
             try:
-                self.traceback = traceback.format_exc()
+                try:
+                    self.traceback = traceback.format_exc()
+                except:
+                    self.traceback = traceback.format_exc(limit=1)
             except:
                 self.traceback = 'no traceback because template parsing error'
             try:
@@ -199,10 +202,10 @@ class RestrictedError(Exception):
 
 
 def compile2(code, layer):
-    return compile(code.rstrip(), layer, 'exec')
+    return compile(code, layer, 'exec')
 
 
-def restricted(code, environment=None, layer='Unknown'):
+def restricted(ccode, environment=None, layer='Unknown'):
     """
     Runs code in environment and returns the output. If an exception occurs
     in code it raises a RestrictedError containing the traceback. Layer is
@@ -213,10 +216,6 @@ def restricted(code, environment=None, layer='Unknown'):
     environment['__file__'] = layer
     environment['__name__'] = '__restricted__'
     try:
-        if isinstance(code, types.CodeType):
-            ccode = code
-        else:
-            ccode = compile2(code, layer)
         exec(ccode, environment)
     except HTTP:
         raise
@@ -231,7 +230,7 @@ def restricted(code, environment=None, layer='Unknown'):
             sys.excepthook(etype, evalue, tb)
         del tb
         output = "%s %s" % (etype, evalue)
-        raise RestrictedError(layer, code, output, environment)
+        raise RestrictedError(layer, ccode, output, environment)
 
 
 def snapshot(info=None, context=5, code=None, environment=None):

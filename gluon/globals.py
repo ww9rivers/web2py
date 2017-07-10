@@ -13,7 +13,7 @@ Contains the classes for the global used variables:
 - Session
 
 """
-from gluon._compat import pickle, StringIO, copyreg, Cookie, urlparse, PY2, iteritems, to_unicode, to_native, unicodeT
+from gluon._compat import pickle, StringIO, copyreg, Cookie, urlparse, PY2, iteritems, to_unicode, to_native, unicodeT, long
 from gluon.storage import Storage, List
 from gluon.streamer import streamer, stream_file_or_304_or_206, DEFAULT_CHUNK_SIZE
 from gluon.contenttype import contenttype
@@ -89,10 +89,11 @@ class SortingPickler(Pickler):
         self._batch_setitems([(key, obj[key]) for key in sorted(obj)])
 
 if PY2:
-#FIXME PY3
     SortingPickler.dispatch = copy.copy(Pickler.dispatch)
     SortingPickler.dispatch[dict] = SortingPickler.save_dict
-
+else:
+    SortingPickler.dispatch_table = copyreg.dispatch_table.copy()
+    SortingPickler.dispatch_table[dict] = SortingPickler.save_dict
 
 def sorting_dumps(obj, protocol=None):
     file = StringIO()
@@ -349,14 +350,14 @@ class Request(Storage):
             current.session.forget()
             redirect(URL(scheme='https', args=self.args, vars=self.vars))
 
-    def restful(self):
+    def restful(self, ignore_extension=False):
         def wrapper(action, request=self):
             def f(_action=action, *a, **b):
                 request.is_restful = True
                 env = request.env
                 is_json = env.content_type=='application/json'
                 method = env.request_method
-                if len(request.args) and '.' in request.args[-1]:
+                if not ignore_extension and len(request.args) and '.' in request.args[-1]:
                     request.args[-1], _, request.extension = request.args[-1].rpartition('.')
                     current.response.headers['Content-Type'] = \
                         contenttype('.' + request.extension.lower())
@@ -415,7 +416,6 @@ class Response(Storage):
         if not escape:
             self.body.write(str(data))
         else:
-            # FIXME PY3:
             self.body.write(to_native(xmlescape(data)))
 
     def render(self, *a, **b):
@@ -439,13 +439,11 @@ class Response(Storage):
             from gluon._compat import StringIO
             (obody, oview) = (self.body, self.view)
             (self.body, self.view) = (StringIO(), view)
-            run_view_in(self._view_environment)
-            page = self.body.getvalue()
+            page = run_view_in(self._view_environment)
             self.body.close()
             (self.body, self.view) = (obody, oview)
         else:
-            run_view_in(self._view_environment)
-            page = self.body.getvalue()
+            page = run_view_in(self._view_environment)
         return page
 
     def include_meta(self):

@@ -12,11 +12,6 @@ import gluon.contenttype
 import gluon.fileutils
 from gluon._compat import iteritems
 
-try:
-    import pygraphviz as pgv
-except ImportError:
-    pgv = None
-
 is_gae = request.env.web2py_runtime_gae or False
 
 # ## critical --- make a copy of the environment
@@ -213,7 +208,7 @@ def select():
 
     if is_imap:
         step = 3
- 
+
     stop = start + step
 
     table = None
@@ -409,7 +404,7 @@ def ccache():
     import copy
     import time
     import math
-    from gluon import portalocker
+    from pydal.contrib import portalocker
 
     ram = {
         'entries': 0,
@@ -421,7 +416,7 @@ def ccache():
         'oldest': time.time(),
         'keys': []
     }
-    
+
     disk = copy.copy(ram)
     total = copy.copy(ram)
     disk['keys'] = []
@@ -466,7 +461,7 @@ def ccache():
 
         for key in cache.disk.storage:
             value = cache.disk.storage[key]
-            if isinstance(value[1], dict):
+            if key == 'web2py_cache_statistics' and isinstance(value[1], dict):
                 disk['hits'] = value[1]['hit_total'] - value[1]['misses']
                 disk['misses'] = value[1]['misses']
                 try:
@@ -482,7 +477,7 @@ def ccache():
                     disk['oldest'] = value[0]
                 disk['keys'].append((key, GetInHMS(time.time() - value[0])))
 
-        ram_keys = ram.keys() # ['hits', 'objects', 'ratio', 'entries', 'keys', 'oldest', 'bytes', 'misses']
+        ram_keys = list(ram) # ['hits', 'objects', 'ratio', 'entries', 'keys', 'oldest', 'bytes', 'misses']
         ram_keys.remove('ratio')
         ram_keys.remove('oldest')
         for key in ram_keys:
@@ -564,57 +559,6 @@ def table_template(table):
     return "< %s >" % TABLE(*rows, **dict(_bgcolor=bgcolor, _border=1,
                                           _cellborder=0, _cellspacing=0)
                              ).xml()
-
-
-def bg_graph_model():
-    graph = pgv.AGraph(layout='dot',  directed=True,  strict=False,  rankdir='LR')
-
-    subgraphs = dict()
-    for tablename in db.tables:
-        if hasattr(db[tablename],'_meta_graphmodel'):
-            meta_graphmodel = db[tablename]._meta_graphmodel
-        else:
-            meta_graphmodel = dict(group=request.application, color='#ECECEC')
-
-        group = meta_graphmodel['group'].replace(' ', '')
-        if group not in subgraphs:
-            subgraphs[group] = dict(meta=meta_graphmodel, tables=[])
-        subgraphs[group]['tables'].append(tablename)
-
-        graph.add_node(tablename, name=tablename, shape='plaintext',
-                       label=table_template(tablename))
-
-    for n, key in enumerate(subgraphs.iterkeys()):
-        graph.subgraph(nbunch=subgraphs[key]['tables'],
-                    name='cluster%d' % n,
-                    style='filled',
-                    color=subgraphs[key]['meta']['color'],
-                    label=subgraphs[key]['meta']['group'])
-
-    for tablename in db.tables:
-        for field in db[tablename]:
-            f_type = field.type
-            if isinstance(f_type,str) and (
-                f_type.startswith('reference') or
-                f_type.startswith('list:reference')):
-                referenced_table = f_type.split()[1].split('.')[0]
-                n1 = graph.get_node(tablename)
-                n2 = graph.get_node(referenced_table)
-                graph.add_edge(n1, n2, color="#4C4C4C", label='')
-
-    graph.layout()
-    if not request.args:
-        response.headers['Content-Type'] = 'image/png'
-        return graph.draw(format='png', prog='dot')
-    else:
-        response.headers['Content-Disposition']='attachment;filename=graph.%s'%request.args(0)
-        if request.args(0) == 'dot':
-            return graph.string()
-        else:
-            return graph.draw(format=request.args(0), prog='dot')
-
-def graph_model():
-    return dict(databases=databases, pgv=pgv)
 
 def manage():
     tables = manager_action['tables']
@@ -700,3 +644,52 @@ def hooks():
             ul_t.append(UL([LI(A(f['funcname'], _class="editor_filelink", _href=f['url']if 'url' in f else None, **{'_data-lineno':f['lineno']-1})) for f in op['functions']]))
         ul_main.append(ul_t)
     return ul_main
+
+
+# ##########################################################
+# d3 based model visualizations
+# ###########################################################
+
+def d3_graph_model():
+    """ See https://www.facebook.com/web2py/posts/145613995589010 from Bruno Rocha
+    and also the app_admin bg_graph_model function
+    
+    Create a list of table dicts, called "nodes"
+    """
+    
+    data = {}
+    nodes = []
+    links = []
+
+    subgraphs = dict()
+
+    for tablename in db.tables:
+        fields = []
+        for field in db[tablename]:
+            f_type = field.type
+            if not isinstance(f_type,str):
+                disp = ' '
+            elif f_type == 'string':
+                disp =  field.length
+            elif f_type == 'id':
+                disp =  "PK"
+            elif f_type.startswith('reference') or \
+                f_type.startswith('list:reference'):
+                disp = "FK"
+            else:
+                disp = ' '
+            fields.append(dict(name= field.name, type=field.type, disp = disp))
+
+            if isinstance(f_type,str) and (
+                f_type.startswith('reference') or
+                f_type.startswith('list:reference')):
+                referenced_table = f_type.split()[1].split('.')[0]
+
+                links.append(dict(source=tablename, target = referenced_table))
+
+        nodes.append(dict(name=tablename, type="table", fields = fields))
+
+    # d3 v4 allows individual modules to be specified.  The complete d3 library is included below.
+    response.files.append(URL('admin','static','js/d3.min.js'))
+    response.files.append(URL('admin','static','js/d3_graph.js'))
+    return dict(databases=databases, nodes=nodes, links=links)

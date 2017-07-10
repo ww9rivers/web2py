@@ -11,7 +11,8 @@ import errno
 import socket
 import logging
 import platform
-from gluon._compat import iteritems, to_bytes, StringIO, urllib_unquote
+from gluon._compat import iteritems, to_bytes, StringIO
+from gluon._compat import urllib_unquote, to_native
 
 # Define Constants
 VERSION = '1.2.6'
@@ -306,13 +307,13 @@ try:
 except ImportError:
     has_futures = False
 
-    class Future:
+    class Future(object):
         pass
 
-    class ThreadPoolExecutor:
+    class ThreadPoolExecutor(object):
         pass
 
-    class _WorkItem:
+    class _WorkItem(object):
         pass
 
 
@@ -783,8 +784,7 @@ class Rocket(object):
                        the application developer.  Please update your \
                        applications to no longer call rocket.stop(True)"
                 try:
-                    import warnings
-                    raise warnings.DeprecationWarning(msg)
+                    raise DeprecationWarning(msg)
                 except ImportError:
                     raise RuntimeError(msg)
 
@@ -1661,7 +1661,7 @@ class WSGIWorker(Worker):
             try:
                 peercert = conn.socket.getpeercert(binary_form=True)
                 environ['SSL_CLIENT_RAW_CERT'] = \
-                    peercert and ssl.DER_cert_to_PEM_cert(peercert)
+                    peercert and to_native(ssl.DER_cert_to_PEM_cert(peercert))
             except Exception:
                 print(sys.exc_info()[1])
         else:

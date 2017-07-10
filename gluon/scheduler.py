@@ -477,7 +477,8 @@ def executor(queue, task, out):
             # Get controller-specific subdirectory if task.app is of
             # form 'app/controller'
             (a, c, f) = parse_path_info(task.app)
-            _env = env(a=a, c=c, import_models=True)
+            _env = env(a=a, c=c, import_models=True,
+                       extra_request={'is_scheduler': True})
             logging.getLogger().setLevel(level)
             f = task.function
             functions = current._scheduler.tasks
@@ -1157,7 +1158,7 @@ class Scheduler(MetaScheduler):
         if not self.db_thread:
             logger.debug('thread building own DAL object')
             self.db_thread = DAL(
-                self.db._uri, folder=self.db._adapter.folder)
+                self.db._uri, folder=self.db._adapter.folder, decode_credentials=True)
             self.define_tables(self.db_thread, migrate=False)
         try:
             db = self.db_thread
@@ -1499,6 +1500,8 @@ class Scheduler(MetaScheduler):
                 kwargs.update(start_time=start_time, next_run_time=next_run_time)
             except:
                 pass
+        if 'start_time' in kwargs and 'next_run_time' not in kwargs:
+            kwargs.update(next_run_time=kwargs['start_time'])
         rtn = self.db.scheduler_task.validate_and_insert(**kwargs)
         if not rtn.errors:
             rtn.uuid = tuuid
@@ -1695,7 +1698,7 @@ def main():
     print('groups for this worker: ' + ', '.join(group_names))
     print('connecting to database in folder: ' + options.db_folder or './')
     print('using URI: ' + options.db_uri)
-    db = DAL(options.db_uri, folder=options.db_folder)
+    db = DAL(options.db_uri, folder=options.db_folder, decode_credentials=True)
     print('instantiating scheduler...')
     scheduler = Scheduler(db=db,
                           worker_name=options.worker_name,
