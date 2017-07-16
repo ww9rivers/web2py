@@ -30,7 +30,8 @@ except:
 
 if request.is_https:
     session.secure()
-elif (remote_addr not in hosts) and (remote_addr != "127.0.0.1"):
+elif (remote_addr not in hosts) and (remote_addr != "127.0.0.1") and \
+    (request.function != 'manage'):
     raise HTTP(200, T('appadmin is disabled because insecure channel'))
 
 if request.function == 'manage':
@@ -51,10 +52,14 @@ elif (request.application == 'admin' and not session.authorized) or \
         (request.application != 'admin' and not gluon.fileutils.check_credentials(request)):
     redirect(URL('admin', 'default', 'index',
                  vars=dict(send=URL(args=request.args, vars=request.vars))))
+else:
+    response.subtitle = T('Database Administration (appadmin)')
+    menu = True
 
 ignore_rw = True
 response.view = 'appadmin.html'
-response.menu = [[T('design'), False, URL('admin', 'default', 'design',
+if menu:
+    response.menu = [[T('design'), False, URL('admin', 'default', 'design',
                  args=[request.application])], [T('db'), False,
                  URL('index')], [T('state'), False,
                  URL('state')], [T('cache'), False,
@@ -64,6 +69,10 @@ response.menu = [[T('design'), False, URL('admin', 'default', 'design',
 # ## auxiliary functions
 # ###########################################################
 
+if False and request.tickets_db:
+    from gluon.restricted import TicketStorage
+    ts = TicketStorage()
+    ts._get_table(request.tickets_db, ts.tablename, request.application)
 
 def get_databases(request):
     dbs = {}
@@ -172,6 +181,10 @@ def select():
     import re
     db = get_database(request)
     dbname = request.args[0]
+    try:
+        is_imap = db._uri.startswith("imap://")
+    except (KeyError, AttributeError, TypeError):
+        is_imap = False
     regex = re.compile('(?P<table>\w+)\.(?P<field>\w+)=(?P<value>\d+)')
     if len(request.args) > 1 and hasattr(db[request.args[1]], '_primarykey'):
         regex = re.compile('(?P<table>\w+)\.(?P<field>\w+)=(?P<value>.+)')
@@ -229,18 +242,24 @@ def select():
         if match:
             table = match.group('table')
         try:
-            nrows = db(query).count()
+            nrows = db(query, ignore_common_filters=True).count()
             if form.vars.update_check and form.vars.update_fields:
-                db(query).update(**eval_in_global_env('dict(%s)'
-                                                      % form.vars.update_fields))
+                db(query, ignore_common_filters=True).update(
+                    **eval_in_global_env('dict(%s)' % form.vars.update_fields))
                 response.flash = T('%s %%{row} updated', nrows)
             elif form.vars.delete_check:
-                db(query).delete()
+                db(query, ignore_common_filters=True).delete()
                 response.flash = T('%s %%{row} deleted', nrows)
-            nrows = db(query).count()
+            nrows = db(query, ignore_common_filters=True).count()
+
+            if is_imap:
+                fields = [db[table][name] for name in
+                    ("id", "uid", "created", "to",
+                     "sender", "subject")]
             if orderby:
-                rows = db(query, ignore_common_filters=True).select(limitby=(
-                    start, stop), orderby=eval_in_global_env(orderby))
+                rows = db(query, ignore_common_filters=True).select(
+                              *fields, limitby=(start, stop),
+                              orderby=eval_in_global_env(orderby))
             else:
                 rows = db(query, ignore_common_filters=True).select(
                     *fields, limitby=(start, stop))
@@ -272,11 +291,12 @@ def select():
         table=table,
         start=start,
         stop=stop,
+        step=step,
         nrows=nrows,
         rows=rows,
         query=request.vars.query,
         formcsv=formcsv,
-        tb=tb,
+        tb=tb
     )
 
 
@@ -289,14 +309,15 @@ def update():
     (db, table) = get_table(request)
     keyed = hasattr(db[table], '_primarykey')
     record = None
+    db[table]._common_filter = None
     if keyed:
         key = [f for f in request.vars if f in db[table]._primarykey]
         if key:
             record = db(db[table][key[0]] == request.vars[key[
-                        0]], ignore_common_filters=True).select().first()
+                        0]]).select().first()
     else:
         record = db(db[table].id == request.args(
-            2), ignore_common_filters=True).select().first()
+            2)).select().first()
 
     if not record:
         qry = query_by_table_type(table, db)

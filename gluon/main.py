@@ -498,16 +498,6 @@ def wsgibase(environ, responder):
                     session._fixup_before_save()
                     http_response.cookies2headers(response.cookies)
 
-                # <<<<<<< HEAD
-                rcookies = response.cookies
-                if response.session_id_name in rcookies:
-                    if session._forget:
-                        del rcookies[response.session_id_name]
-                    elif session._secure:
-                        rcookies[response.session_id_name]['secure'] = True
-                http_response.cookies2headers(rcookies)
-                # =======
-                # >>>>>>> 8bdc5f20e73c519e875a2eed412f5008a5097e15
                 ticket = None
 
             except RestrictedError as e:
