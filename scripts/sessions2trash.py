@@ -20,23 +20,24 @@ Typical usage:
 
     # Delete all sessions regardless of expiry and exit.
     python web2py.py -S app -M -R scripts/sessions2trash.py -A -o -x 0
-    
+
     # Delete session in a module (move to the modules folder)
     from sessions2trash import single_loop
     def delete_sessions():
-        single_loop()
-    
+        single_loop(auth.settings.expiration)
+
 """
 
 from __future__ import with_statement
+
 from gluon import current
 from gluon.storage import Storage
+from gluon._compat import pickle
 from optparse import OptionParser
-import cPickle
 import datetime
-import os
 import stat
 import time
+import os
 
 EXPIRATION_MINUTES = 60
 SLEEP_MINUTES = 5
@@ -81,12 +82,12 @@ class SessionSet(object):
                 status = 'trashed'
 
             if self.verbose > 1:
-                print 'key: %s' % str(item)
-                print 'expiration: %s seconds' % self.expiration
-                print 'last visit: %s' % str(last_visit)
-                print 'age: %s seconds' % age
-                print 'status: %s' % status
-                print ''
+                print('key: %s' % str(item))
+                print('expiration: %s seconds' % self.expiration)
+                print('last visit: %s' % str(last_visit))
+                print('age: %s seconds' % age)
+                print('status: %s' % status)
+                print('')
             elif self.verbose > 0:
                 print('%s %s' % (str(item), status))
 
@@ -99,12 +100,10 @@ class SessionSetDb(SessionSet):
 
     def get(self):
         """Return list of SessionDb instances for existing sessions."""
-        sessions = []
         table = current.response.session_db_table
         if table:
             for row in table._db(table.id > 0).select():
-                sessions.append(SessionDb(row))
-        return sessions
+                yield SessionDb(row)
 
 
 class SessionSetFiles(SessionSet):
@@ -113,10 +112,20 @@ class SessionSetFiles(SessionSet):
     def __init__(self, expiration, force, verbose):
         SessionSet.__init__(self, expiration, force, verbose)
 
+    def cleanup_empty_folders(self, root_path):
+        for path, dirs, files in os.walk(root_path, topdown=False):
+            for d in dirs:
+                dd = os.path.join(path, d)
+                if not os.listdir(dd):
+                    os.rmdir(dd)
+
     def get(self):
         """Return list of SessionFile instances for existing sessions."""
         root_path = os.path.join(current.request.folder, 'sessions')
-        return [SessionFile(os.path.join(path, x)) for path,dirs,files in os.walk(root_path) for x in files]
+        for path, dirs, files in os.walk(root_path, topdown=False):
+            for x in files:
+                yield SessionFile(os.path.join(path, x))
+        self.cleanup_empty_folders(root_path)
 
 
 class SessionDb(object):
@@ -132,7 +141,7 @@ class SessionDb(object):
 
     def get(self):
         session = Storage()
-        session.update(cPickle.loads(self.row.session_data))
+        session.update(pickle.loads(self.row.session_data))
         return session
 
     def last_visit_default(self):
@@ -142,7 +151,7 @@ class SessionDb(object):
             try:
                 return datetime.datetime.strptime(self.row.modified_datetime, '%Y-%m-%d %H:%M:%S.%f')
             except:
-                print 'failed to retrieve last modified time (value: %s)' % self.row.modified_datetime
+                print('failed to retrieve last modified time (value: %s)' % self.row.modified_datetime)
 
     def __str__(self):
         return self.row.unique_key
@@ -191,10 +200,11 @@ def single_loop(expiration=None, force=False, verbose=False):
         except:
             expiration = EXPIRATION_MINUTES * 60
 
-    set_db = SessionSetDb(expiration, force, verbose)
     set_files = SessionSetFiles(expiration, force, verbose)
-    set_db.trash()
     set_files.trash()
+    set_db = SessionSetDb(expiration, force, verbose)
+    set_db.trash()
+
 
 def main():
     """Main processing."""
@@ -234,7 +244,7 @@ def main():
             break
         else:
             if options.verbose:
-                print 'Sleeping %s seconds' % (options.sleep)
+                print('Sleeping %s seconds' % (options.sleep))
             time.sleep(options.sleep)
 
 if __name__ == '__main__':

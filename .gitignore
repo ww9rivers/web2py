@@ -12,7 +12,7 @@
 *.rej
 *.orig
 Thumbs.db
-.DS_Store
+*.DS_Store
 index.yaml
 modpythonhandler.py
 routes.py
