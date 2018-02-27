@@ -392,12 +392,11 @@ def ccache():
                 cache.disk.clear()
                 session.flash += T("Disk Cleared")
         redirect(URL(r=request))
-
+    
     try:
-        from guppy import hpy
-        hp = hpy()
+        from pympler.asizeof import asizeof
     except ImportError:
-        hp = False
+        asizeof = False
 
     import shelve
     import os
@@ -451,9 +450,9 @@ def ccache():
             ram['ratio'] = 0
 
         for key, value in iteritems(cache.ram.storage):
-            if hp:
-                ram['bytes'] += hp.iso(value[1]).size
-                ram['objects'] += hp.iso(value[1]).count
+            if asizeof:
+                ram['bytes'] += asizeof(value[1])
+                ram['objects'] += 1
             ram['entries'] += 1
             if value[0] < ram['oldest']:
                 ram['oldest'] = value[0]
@@ -469,9 +468,9 @@ def ccache():
                 except (KeyError, ZeroDivisionError):
                     disk['ratio'] = 0
             else:
-                if hp:
-                    disk['bytes'] += hp.iso(value[1]).size
-                    disk['objects'] += hp.iso(value[1]).count
+                if asizeof:
+                    disk['bytes'] += asizeof(value[1])
+                    disk['objects'] += 1
                 disk['entries'] += 1
                 if value[0] < disk['oldest']:
                     disk['oldest'] = value[0]
@@ -511,7 +510,7 @@ def ccache():
         total['keys'] = key_table(total['keys'])
 
     return dict(form=form, total=total,
-                ram=ram, disk=disk, object_stats=hp != False)
+                ram=ram, disk=disk, object_stats=asizeof != False)
 
 
 def table_template(table):
@@ -657,37 +656,36 @@ def d3_graph_model():
     Create a list of table dicts, called "nodes"
     """
     
-    data = {}
     nodes = []
     links = []
 
-    subgraphs = dict()
+    for database in databases:
+        db = eval_in_global_env(database)
+        for tablename in db.tables:
+            fields = []
+            for field in db[tablename]:
+                f_type = field.type
+                if not isinstance(f_type,str):
+                    disp = ' '
+                elif f_type == 'string':
+                    disp =  field.length
+                elif f_type == 'id':
+                    disp =  "PK"
+                elif f_type.startswith('reference') or \
+                    f_type.startswith('list:reference'):
+                    disp = "FK"
+                else:
+                    disp = ' '
+                fields.append(dict(name= field.name, type=field.type, disp = disp))
 
-    for tablename in db.tables:
-        fields = []
-        for field in db[tablename]:
-            f_type = field.type
-            if not isinstance(f_type,str):
-                disp = ' '
-            elif f_type == 'string':
-                disp =  field.length
-            elif f_type == 'id':
-                disp =  "PK"
-            elif f_type.startswith('reference') or \
-                f_type.startswith('list:reference'):
-                disp = "FK"
-            else:
-                disp = ' '
-            fields.append(dict(name= field.name, type=field.type, disp = disp))
+                if isinstance(f_type,str) and (
+                    f_type.startswith('reference') or
+                    f_type.startswith('list:reference')):
+                    referenced_table = f_type.split()[1].split('.')[0]
 
-            if isinstance(f_type,str) and (
-                f_type.startswith('reference') or
-                f_type.startswith('list:reference')):
-                referenced_table = f_type.split()[1].split('.')[0]
+                    links.append(dict(source=tablename, target = referenced_table))
 
-                links.append(dict(source=tablename, target = referenced_table))
-
-        nodes.append(dict(name=tablename, type="table", fields = fields))
+            nodes.append(dict(name=tablename, type="table", fields = fields))
 
     # d3 v4 allows individual modules to be specified.  The complete d3 library is included below.
     response.files.append(URL('admin','static','js/d3.min.js'))

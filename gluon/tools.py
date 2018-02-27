@@ -12,7 +12,7 @@ Auth, Mail, PluginManager and various utilities
 
 import base64
 from functools import reduce
-from gluon._compat import pickle, thread, urllib2, Cookie, StringIO
+from gluon._compat import pickle, thread, urllib2, Cookie, StringIO, urlencode
 from gluon._compat import configparser, MIMEBase, MIMEMultipart, MIMEText, Header
 from gluon._compat import Encoders, Charset, long, urllib_quote, iteritems
 from gluon._compat import to_bytes, to_native, add_charset
@@ -27,7 +27,6 @@ import time
 import fnmatch
 import traceback
 import smtplib
-import urllib
 import email.utils
 import random
 import hmac
@@ -873,7 +872,7 @@ class Recaptcha(DIV):
                 and len(recaptcha_challenge_field)):
             self.errors['captcha'] = self.error_message
             return False
-        params = urllib.urlencode({
+        params = urlencode({
             'privatekey': private_key,
             'remoteip': remoteip,
             'challenge': recaptcha_challenge_field,
@@ -1026,7 +1025,7 @@ class Recaptcha2(DIV):
         if not recaptcha_response_field:
             self.errors['captcha'] = self.error_message
             return False
-        params = urllib.urlencode({
+        params = urlencode({
             'secret': self.private_key,
             'remoteip': remoteip,
             'response': recaptcha_response_field,
@@ -1320,7 +1319,7 @@ class AuthJWT(object):
         # is the following safe or should we use
         # calendar.timegm(datetime.datetime.utcnow().timetuple())
         # result seem to be the same (seconds since epoch, in UTC)
-        now = time.mktime(datetime.datetime.now().timetuple())
+        now = time.mktime(datetime.datetime.utcnow().timetuple())
         expires = now + self.expiration
         payload = dict(
             hmac_key=session_auth['hmac_key'],
@@ -1332,7 +1331,7 @@ class AuthJWT(object):
         return payload
 
     def refresh_token(self, orig_payload):
-        now = time.mktime(datetime.datetime.now().timetuple())
+        now = time.mktime(datetime.datetime.utcnow().timetuple())
         if self.verify_expiration:
             orig_exp = orig_payload['exp']
             if orig_exp + self.leeway < now:
@@ -1762,7 +1761,7 @@ class Auth(AuthAPI):
             if auth.last_visit and auth.last_visit + delta > now:
                 self.user = auth.user
                 # this is a trick to speed up sessions to avoid many writes
-                if (now - auth.last_visit).seconds > (auth.expiration / 10):
+                if (now - auth.last_visit).seconds > (auth.expiration // 10):
                     auth.last_visit = now
             else:
                 self.user = None
@@ -1792,6 +1791,7 @@ class Auth(AuthAPI):
                              servicevalidate='serviceValidate',
                              proxyvalidate='proxyValidate',
                              logout='logout'),
+            cas_create_user=True,
             extra_fields={},
             actions_disabled=[],
             controller=controller,
@@ -2284,6 +2284,7 @@ class Auth(AuthAPI):
         If the user doesn't yet exist, then they are created.
         """
         table_user = self.table_user()
+        create_user = self.settings.cas_create_user
         user = None
         checks = []
         # make a guess about who this user is
@@ -2316,6 +2317,11 @@ class Auth(AuthAPI):
                     update_keys[key] = keys[key]
             user.update_record(**update_keys)
         elif checks:
+            if create_user is False:
+                # Remove current open session a send message
+                self.logout(next=None, onlogout=None, log=None)
+                raise HTTP(403, "Forbidden. User need to be created first.")
+
             if 'first_name' not in keys and 'first_name' in table_user.fields:
                 guess = keys.get('email', 'anonymous').split('@')[0]
                 keys['first_name'] = keys.get('username', guess)
@@ -2491,9 +2497,9 @@ class Auth(AuthAPI):
                 success = True
 
         def build_response(body):
-            return '<?xml version="1.0" encoding="UTF-8"?>\n' +\
-                TAG['cas:serviceResponse'](
-                    body, **{'_xmlns:cas': 'http://www.yale.edu/tp/cas'}).xml()
+            xml_body = to_native(TAG['cas:serviceResponse'](
+                    body, **{'_xmlns:cas': 'http://www.yale.edu/tp/cas'}).xml())
+            return '<?xml version="1.0" encoding="UTF-8"?>\n' + xml_body
         if success:
             if version == 1:
                 message = 'yes\n%s' % user[userfield]
@@ -2863,7 +2869,7 @@ class Auth(AuthAPI):
 
                 auth.settings.auth_two_factor_enabled = True
                 auth.messages.two_factor_comment = "Verify your OTP Client for the code."
-                auth.settings.two_factor_methods = [lambda user, 
+                auth.settings.two_factor_methods = [lambda user,
                                                            auth_two_factor: _set_two_factor(user, auth_two_factor)]
                 auth.settings.two_factor_onvalidation = [lambda user, otp: verify_otp(user, otp)]
 
@@ -3044,7 +3050,7 @@ class Auth(AuthAPI):
 
         if self.settings.register_verify_password:
             if self.settings.register_fields is None:
-                self.settings.register_fields = [f.name for f in table_user if f.writable]
+                self.settings.register_fields = [f.name for f in table_user if f.writable and not f.compute]
                 k = self.settings.register_fields.index(passfield)
                 self.settings.register_fields.insert(k + 1, "password_two")
             extra_fields = [
@@ -3656,6 +3662,16 @@ class Auth(AuthAPI):
         if not self.is_logged_in():
             redirect(self.settings.login_url,
                      client_side=self.settings.client_side)
+
+        # Go to external link to change the password
+        if self.settings.login_form != self:
+            cas = self.settings.login_form
+            # To prevent error if change_password_url function is not defined in alternate login
+            if hasattr(cas, 'change_password_url'):
+                next = cas.change_password_url(next)
+                if next is not None:
+                    redirect(next)
+
         db = self.db
         table_user = self.table_user()
         s = db(table_user.id == self.user.id)
@@ -3676,7 +3692,8 @@ class Auth(AuthAPI):
             requires = [requires]
         requires = list(filter(lambda t: isinstance(t, CRYPT), requires))
         if requires:
-            requires[0].min_length = 0
+            requires[0] = CRYPT(**requires[0].__dict__) # Copy the existing CRYPT attributes
+            requires[0].min_length = 0 # But do not enforce minimum length for the old password
         form = SQLFORM.factory(
             Field('old_password', 'password', requires=requires,
                   label=self.messages.old_password),
@@ -3760,9 +3777,9 @@ class Auth(AuthAPI):
             if any(f.compute for f in extra_fields):
                 user = table_user[self.user.id]
                 self._update_session_user(user)
+                self.update_groups()
             else:
                 self.user.update(table_user._filter_fields(form.vars))
-
             session.flash = self.messages.profile_updated
             self.log_event(log, self.user)
             callback(onaccept, form)
@@ -4720,7 +4737,7 @@ def fetch(url, data=None, headers=None,
           user_agent='Mozilla/5.0'):
     headers = headers or {}
     if data is not None:
-        data = urllib.urlencode(data)
+        data = urlencode(data)
     if user_agent:
         headers['User-agent'] = user_agent
     headers['Cookie'] = ' '.join(
@@ -5531,15 +5548,15 @@ def prettydate(d, T=lambda x: x, utc=False):
     else:
         suffix = ' ago'
     if dt.days >= 2 * 365:
-        return T('%d years' + suffix) % int(dt.days / 365)
+        return T('%d years' + suffix) % int(dt.days // 365)
     elif dt.days >= 365:
         return T('1 year' + suffix)
     elif dt.days >= 60:
-        return T('%d months' + suffix) % int(dt.days / 30)
+        return T('%d months' + suffix) % int(dt.days // 30)
     elif dt.days >= 27:  # 4 weeks ugly
         return T('1 month' + suffix)
     elif dt.days >= 14:
-        return T('%d weeks' + suffix) % int(dt.days / 7)
+        return T('%d weeks' + suffix) % int(dt.days // 7)
     elif dt.days >= 7:
         return T('1 week' + suffix)
     elif dt.days > 1:
@@ -5547,11 +5564,11 @@ def prettydate(d, T=lambda x: x, utc=False):
     elif dt.days == 1:
         return T('1 day' + suffix)
     elif dt.seconds >= 2 * 60 * 60:
-        return T('%d hours' + suffix) % int(dt.seconds / 3600)
+        return T('%d hours' + suffix) % int(dt.seconds // 3600)
     elif dt.seconds >= 60 * 60:
         return T('1 hour' + suffix)
     elif dt.seconds >= 2 * 60:
-        return T('%d minutes' + suffix) % int(dt.seconds / 60)
+        return T('%d minutes' + suffix) % int(dt.seconds // 60)
     elif dt.seconds >= 60:
         return T('1 minute' + suffix)
     elif dt.seconds > 1:
